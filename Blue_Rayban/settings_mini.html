@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Twitch Chat - ミニモード設定</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #f7f9fc;
+            color: #333;
+            margin: 0;
+            padding: 24px;
+            font-size: 14px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 20px;
+            color: #2c3e50;
+            border-bottom: 2px solid #5a7a25;
+            padding-bottom: 10px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .link-btn {
+            background-color: #e0e0e0;
+            color: #333;
+            text-decoration: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: normal;
+        }
+
+        .link-btn:hover {
+            background-color: #ccc;
+        }
+
+        .card {
+            background-color: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #5a7a25;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+
+        .control-group label {
+            font-weight: bold;
+            color: #555;
+        }
+
+        .hint {
+            display: block;
+            font-size: 11px;
+            color: #888;
+            margin-top: 4px;
+            font-weight: normal;
+        }
+
+        input[type="color"] {
+            width: 50px;
+            height: 32px;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        input[type="number"] {
+            width: 80px;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            text-align: right;
+        }
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .btn-save {
+            background-color: #5a7a25;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .btn-save:hover {
+            background-color: #4a6a1a;
+        }
+
+        #save-message {
+            display: none;
+            text-align: center;
+            color: #5a7a25;
+            font-weight: bold;
+            margin-top: 10px;
+            padding: 10px;
+            background: #e8f5e9;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>
+            <span>⚙️ ミニモード設定</span>
+            <a href="settings.html" class="link-btn">← 通常版の設定に戻る</a>
+        </h1>
+
+        <div class="card">
+            <div class="card-title">🎨 デザイン</div>
+
+            <div class="control-group">
+                <label>背景色 <span class="hint">RGBA(赤,緑,青,透明度)など指定可</span></label>
+                <input type="text" id="bgColor" style="padding:4px; width:150px;">
+            </div>
+
+            <div class="control-group">
+                <label>名前の色</label>
+                <input type="color" id="nameColor">
+            </div>
+
+            <div class="control-group">
+                <label>文字サイズ (px)</label>
+                <input type="number" id="fontSize" min="10" max="40">
+            </div>
+
+            <div class="control-group">
+                <label>アイコンサイズ (px)</label>
+                <input type="number" id="iconSize" min="16" max="64">
+            </div>
+
+            <div class="control-group">
+                <label>デザインテーマ</label>
+                <select id="designTheme" style="padding: 6px; border-radius: 6px; border: 1px solid #ccc;">
+                    <option value="modern">モダン（標準）</option>
+                    <option value="retro">レトロピクセル</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>角丸 (px) <span class="hint">モダンの時のみ有効</span></label>
+                <input type="number" id="borderRadius" min="0" max="40">
+            </div>
+
+            <div class="control-group">
+                <label>吹き出しのしっぽ</label>
+                <select id="tailPosition" style="padding: 6px; border-radius: 6px; border: 1px solid #ccc;">
+                    <option value="none">なし</option>
+                    <option value="left">左側（真横）</option>
+                    <option value="right">右側（真横）</option>
+                    <option value="top-left">左上（斜め）</option>
+                    <option value="top-right">右上（斜め）</option>
+                    <option value="bottom-left">左下（斜め）</option>
+                    <option value="bottom-right">右下（斜め）</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">👁️ 表示切り替え</div>
+
+            <div class="control-group">
+                <label>ユーザー名</label>
+                <input type="checkbox" id="showName">
+            </div>
+
+            <div class="control-group">
+                <label>ユーザーアイコン</label>
+                <input type="checkbox" id="showIcons">
+            </div>
+
+            <div class="control-group">
+                <label>Twitchバッジ</label>
+                <input type="checkbox" id="showBadges">
+            </div>
+
+            <div class="control-group">
+                <label>バッジの配置（アイコン基準）</label>
+                <select id="badgePosition" style="padding: 6px; border-radius: 6px; border: 1px solid #ccc;">
+                    <option value="right">右側</option>
+                    <option value="left">左側</option>
+                    <option value="bottom">下へ横並び</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">✨ アニメーション・挙動</div>
+
+            <div class="control-group">
+                <label>消えるまで (秒) <span class="hint">0 でずっと残ります</span></label>
+                <input type="number" id="fadeOutDelay" min="0" max="300" step="1">
+            </div>
+
+            <div class="control-group">
+                <label>最大表示件数 <span class="hint">残す場合はOBSの高さに合わせて少し多めに（例: 20〜40）</span></label>
+                <input type="number" id="maxMessages" min="1" max="100" step="1">
+            </div>
+
+            <div class="control-group">
+                <label>📚 積み上げモード <span class="hint">上から下へ追加され、ずっと残ります（OBSでスクロール推奨）</span></label>
+                <input type="checkbox" id="stackMode">
+            </div>
+        </div>
+
+        <button class="btn-save" onclick="saveSettings()">💾 保存して適用</button>
+        <div id="save-message">✅ 設定を保存しました！（OBSやミニモード画面に即時反映されます）</div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAjkMsdvypCH4BsoNcjSNp8GX6_bLbKsA8",
+            authDomain: "seya-chat-trans.firebaseapp.com",
+            databaseURL: "https://seya-chat-trans-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "seya-chat-trans"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        const DEFAULTS = {
+            bgColor: 'rgba(30, 40, 20, 0.85)',
+            nameColor: '#d5f0a0',
+            fontSize: 16, borderRadius: 20, iconSize: 32,
+            fadeOutDelay: 0, maxMessages: 50,
+            stackMode: false, showIcons: true, showBadges: true,
+            showName: false, badgePosition: 'bottom',
+            designTheme: 'modern', tailPosition: 'none'
+        };
+
+        const controls = [
+            'bgColor', 'nameColor', 'fontSize', 'borderRadius', 'iconSize',
+            'fadeOutDelay', 'maxMessages', 'stackMode', 'showIcons', 'showBadges',
+            'showName', 'badgePosition', 'designTheme', 'tailPosition'
+        ];
+
+        function loadSettings() {
+            // Firebaseから設定を読み込む（OBSと同期している最新データ）
+            database.ref('chats_prompt/miniSettings').once('value').then(snapshot => {
+                let s = { ...DEFAULTS };
+                if (snapshot.exists()) {
+                    s = { ...DEFAULTS, ...snapshot.val() };
+                } else {
+                    // Firebaseに無ければローカルから
+                    const stored = localStorage.getItem('miniSettings');
+                    if (stored) s = { ...DEFAULTS, ...JSON.parse(stored) };
+                }
+
+                controls.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el.type === 'checkbox') {
+                        el.checked = s[id];
+                    } else {
+                        el.value = s[id];
+                    }
+                });
+            });
+        }
+
+        function saveSettings() {
+            const s = {};
+            controls.forEach(id => {
+                const el = document.getElementById(id);
+                if (el.type === 'checkbox') {
+                    s[id] = el.checked;
+                } else if (el.type === 'number') {
+                    s[id] = Number(el.value);
+                } else {
+                    s[id] = el.value;
+                }
+            });
+
+            localStorage.setItem('miniSettings', JSON.stringify(s));
+            // 別タブ（index_mini.html）に更新を知らせるイベントを発火
+            localStorage.setItem('miniSettingsUpdate', Date.now());
+
+            // Firebase等に保存してOBSにリアルタイム同期する
+            database.ref('chats_prompt/miniSettings').set(s).then(() => {
+                const msg = document.getElementById('save-message');
+                msg.style.display = 'block';
+                setTimeout(() => msg.style.display = 'none', 3000);
+            });
+        }
+
+        // 初期読み込み
+        loadSettings();
+    </script>
+</body>
+
+</html>

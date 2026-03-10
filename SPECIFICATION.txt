@@ -1,0 +1,254 @@
+================================================================================
+  PINK BRONSON 1.0  —  SYSTEM SPECIFICATION
+  作成日: 2026-03-10
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1. システム概要
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Pink Bronson は Twitch 配信者向けのプロデューサーデスクシステム。
+  メインハブ (pink_bronson.py) が3つの子ツールを子プロセスとして管理し、
+  配信中のリアルタイム支援 (翻訳・チャット表示・要約・STT) を一元操作する。
+
+  デザイン方針:
+    - メインハブ : Tokyo Night Neon (ディープネイビー + ネオン配色)
+    - 子ツール UI : 90s Industrial LCD (ガンメタル筐体 + フォスファーグリーン)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  2. ディレクトリ構成
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Pink Bronson1.0/
+  ├── pink_bronson.py              メインハブ (起動エントリポイント)
+  ├── config.json                  全API設定・ユーザー設定の統合ファイル
+  ├── bronson_icon.png             ウィンドウアイコン
+  ├── data/
+  │   ├── stream_YYYYMMDD_HHMM.json    セッションログ (STT結果)
+  │   ├── archive/
+  │   │   └── YYYYMMDD_HHMM_stt.txt   テキストアーカイブ
+  │   └── temp_audio/              Gemini STT用一時WAVファイル置場
+  ├── Blue_Rayban/                 翻訳ツール
+  │   ├── main_ui.py               コントロールパネルUI (子プロセス)
+  │   ├── mainTST.py               実体: twitchio + Gemini翻訳エンジン
+  │   ├── twitchtoken.txt          Blue_Rayban専用の認証設定 (.env形式)
+  │   ├── settings.html            翻訳設定UI (ブラウザ表示)
+  │   └── index.html 他            Firebase向け表示HTML
+  ├── Emerald_Rolex/               チャットビューア
+  │   ├── main_ui.py               コントロールパネルUI (子プロセス)
+  │   ├── emerald_rolex.py         実体: IRC接続 + WebSocketサーバー
+  │   ├── settings.html            チャット設定UI (ブラウザ表示)
+  │   └── views/emerald_rolex/     OBSブラウザソース用HTML/CSS/JS
+  └── Golden_Chain/
+      └── pinkblonsonbeta/         要約ツール (独自venv必須)
+          ├── venv/                専用Python環境
+          ├── src/
+          │   ├── main_ui.py       メインUI (タブ式コントロールパネル)
+          │   ├── summarizer.py    要約エンジン
+          │   ├── title_gen.py     タイトル生成エンジン
+          │   ├── facilitator.py   話題提案エンジン
+          │   ├── audio_processor.py  STT (Whisper/Gemini)
+          │   ├── obs_helper.py    OBS表示管理
+          │   └── analytics_helper.py  API使用量分析
+          ├── data/                設定・状態JSON・ログ
+          ├── output/              OBS表示用HTML
+          ├── assets/              画像アセット (BronsonR.webp 等)
+          ├── requirements.txt
+          └── setup_beta.bat / run_beta.bat
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  3. メインハブ (pink_bronson.py)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  3-1. クラス構成
+
+    AudioProcessor
+      - STTエンジン本体
+      - バックグラウンドスレッドで音声キャプチャ → 転写ループを実行
+      - バックエンド切替: "whisper" / "gemini"
+      - Whisper: faster-whisper base モデル、CPU/int8
+      - Gemini:  Gemini File API (gemini_stt モジュール依存)
+      - VAD: RMS > 800 で発話検出、無音2ブロックで転写実行
+      - 幻覚フィルター: HALLUCINATIONS リストと照合して除去
+
+    MicMeter
+      - 50ms間隔でRMSを計算しプログレスバーに反映
+      - AudioProcessor とは独立した別InputStream を使用
+
+    SettingsWindow (tk.Toplevel)
+      - Tokyo Night スタイルのモーダルダイアログ
+      - 設定項目: Theme / Twitch Token / Channel / Client-ID /
+                  Client-Secret / Gemini APIキー / Firebase URL
+
+    PinkBronsonUI (tk.Tk)
+      - メインウィンドウ (400×940px、常時最前面)
+      - 子プロセス管理: subprocess.Popen × 3
+      - 子プロセスのstdout をキャプチャしセッションログに中継
+
+  3-2. データフロー
+
+    マイク入力
+      └─ AudioProcessor._loop() [thread]
+          └─ _transcribe() [同スレッド]
+              ├─ write_log() → stream_YYYYMMDD_HHMM.json (FileLock保護)
+              ├─ write_log() → archive/YYYYMMDD_HHMM_stt.txt
+              └─ PinkBronsonUI.on_transcribed() [after(0)] → UI更新
+
+    子プロセス起動
+      PinkBronsonUI.toggle_proc()
+        ├─ subprocess.Popen([python, main_ui.py])
+        ├─ _read_child_output() [thread] → _append_child_log()
+        └─ 終了検知: _on_child_exit() → ボタン表示リセット
+
+  3-3. 設定ファイル (config.json)
+
+    {
+      "theme":       "dark" | "light",
+      "last_mic":    "[N] デバイス名",
+      "stt_backend": "whisper" | "gemini",
+      "api_keys": {
+        "twitch_token":    "oauth:xxxxxxxx",
+        "twitch_channel":  "チャンネル名",
+        "twitch_client_id":     "...",
+        "twitch_client_secret": "...",
+        "gemini_key":      "AIza...",
+        "firebase_url":    "https://xxx.firebaseio.com"
+      }
+    }
+
+  3-4. セッションファイル (data/stream_YYYYMMDD_HHMM.json)
+
+    [
+      { "timestamp": "1741234567.89", "text": "転写テキスト" },
+      ...
+    ]
+    最大100エントリ。超過分は末尾100件に切り捨て。
+    FileLock + アトミック置換 (.tmp → rename) で書き込み競合を回避。
+
+  3-5. Pythonパス解決
+
+    Golden_Chain : ./Golden_Chain/pinkblonsonbeta/venv/Scripts/python.exe
+    Blue_RAY-BAN : C:\Users\seyak\AppData\Local\Python\bin\python.exe
+                   (なければ sys.executable にフォールバック)
+    Emerald_Rolex: sys.executable (同一環境)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  4. Blue_Rayban (翻訳ツール)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  main_ui.py  : コントロールパネル。起動時に自動で mainTST.py を起動。
+  mainTST.py  : twitchio でTwitchチャットを受信し Gemini API で翻訳、
+                Firebase Realtime Database へ書き込む。
+  twitchtoken.txt: load_dotenv 形式の設定ファイル (mainTST.py 専用)
+                   TWITCH_TOKEN / CHANNEL / CLIENT_ID / CLIENT_SECRET /
+                   GEMINI_KEY / FIREBASE_URL を定義
+
+  UI仕様:
+    - ウィンドウ: 780×540px
+    - 構成: ヘッダーバー / コントロールストリップ(LED+START/STOP/SETTINGS) /
+            LCD ログパネル
+    - LED: Canvas oval、STANDBY=暗緑 / ACTIVE=明緑 / ERROR=赤
+    - 起動100ms後に mainTST.py を自動起動
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  5. Emerald_Rolex (チャットビューア)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  main_ui.py       : コントロールパネル。起動時に自動で emerald_rolex.py を起動。
+  emerald_rolex.py : TwitchのIRCに接続し、受信チャットを
+                     WebSocketサーバー (ws://localhost:8765) で配信。
+                     OBSのブラウザソースが接続してチャットを表示する。
+
+  UI仕様:
+    - ウィンドウ: 780×540px (Blue_Rayban と同一構成)
+    - コントロールストリップ右端に "WS :8765" 常時表示
+    - OBS設定: ブラウザソース URL = http://localhost:8765 (or views/の静的HTML)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  6. Golden_Chain (要約ツール)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  独自 venv 必須。setup_beta.bat で初期セットアップ後 run_beta.bat で起動。
+
+  サブプロセス:
+    summarizer.py   - N秒ごとにSTTログを読み込みGeminiで3行要約を生成
+    title_gen.py    - N秒ごとにタイトルを自動生成 (無音時はfake newsモード)
+    facilitator.py  - N秒ごとに次の話題を提案
+    stt (audio_processor) - Golden_Chain内蔵STT (Pink Bronsonのマイク設定共用)
+
+  タブ構成 (main_ui.py):
+    [Main Control]  - STTコントロール / データフロー監視 / 3つのジェネレーター管理
+    [Analytics]     - API使用量とコスト推定 (usage_log.json)
+    [OBS Display]   - OBSブラウザソース用HTML管理
+    [Archive]       - 過去セッションのアーカイブ分析
+
+  UIサイズ: 1280×900px (FHD基準)
+
+  設定項目 (各ジェネレーター共通):
+    - Interval(s)  : 実行間隔
+    - Lookback(s)  : 参照する過去ログの秒数
+    - Prompt       : Geminiへの指示文
+    - STT Engine   : Local Whisper / Gemini API 切替
+
+  API: google-generativeai (Gemini 2.0 Flash)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  7. テーマ・UIデザイン仕様
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  メインハブ (Tokyo Night Neon):
+    bg_main  #1a1b26  bg_panel #24283b  bg_inset #13141f
+    pink     #f7768e  cyan     #7dcfff  gold     #e0af68
+    emerald  #9ece6a  purple   #bb9af7
+    btn_bg   #292e42  btn_act  #3d59a1  btn_stop #3d1a24
+    フォント: Helvetica (ラベル) / Courier (Entry)
+
+  子ツール (90s Industrial LCD):
+    BG      #1C1C1C  PANEL   #242424  LCD_BG  #141800
+    LCD_FG  #AABF00  LCD_DIM #485400  BORDER  #363636
+    BTN_BG  #2A2A2A  BTN_FG  #C4C4C4  LED_ON  #33CC00
+    LED_OFF #122200  LED_RED #BB1100
+    フォント: Courier New (全域)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  8. 外部依存ライブラリ
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  メインハブ環境:
+    faster-whisper    STT (Whisper base, CPU/int8)
+    sounddevice       マイク入力
+    numpy             音声データ処理
+    filelock          セッションファイル排他制御
+    Pillow (PIL)      画像読み込み (BronsonR.webp, アイコン)
+
+  Blue_Rayban 環境 (C:\Users\seyak\AppData\Local\Python):
+    twitchio          Twitch IRC接続
+    google-generativeai  Gemini API
+    firebase-admin (or requests)  Firebase書き込み
+
+  Golden_Chain 環境 (専用venv):
+    google-generativeai  Gemini API
+    faster-whisper / sounddevice / numpy  STT
+    その他: obs_helper, analytics_helper, stream_analyzer
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  9. API・外部サービス
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Twitch IRC / Helix API
+    用途: チャット受信 (Emerald_Rolex)、翻訳対象チャット受信 (Blue_Rayban)
+    認証: OAuth Token (oauth:xxx)、Client-ID/Secret
+
+  Google Gemini API (Gemini 2.0 Flash)
+    用途: STT (音声→テキスト)、翻訳、要約、タイトル生成、話題提案
+    制限: Free Tier = RPM 15 / RPD 1500 / TPM 1,000,000
+
+  Firebase Realtime Database
+    用途: Blue_Rayban の翻訳結果をリアルタイム配信
+
+  WebSocket (localhost:8765)
+    用途: Emerald_Rolex → OBSブラウザソース へのチャット配信
+
+================================================================================
+  END OF SPECIFICATION
+================================================================================

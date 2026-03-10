@@ -1,0 +1,24 @@
+# APIキー・認証情報
+config.json
+Blue_Rayban/twitchtoken.txt
+Golden_Chain/pinkblonsonbeta/.env
+**/*.env
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+
+# 生成ファイル
+data/
+Golden_Chain/pinkblonsonbeta/temp_audio/
+Golden_Chain/pinkblonsonbeta/output/
+Golden_Chain/pinkblonsonbeta/logs/
+Emerald_Rolex/views/emerald_rolex/cache/
+Emerald_Rolex/views/emerald_rolex/ws_token.json
+voicevox/
+my-hosting-page/firebase-debug.log
+firebase-debug.log
+.firebaserc
+# ロックファイル
+*.lock

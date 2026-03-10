@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>seyak2b LIVE — Pink Bronson Mobile</title>
+
+    <!--
+        PixelMplus フォント使用
+        作者: itouhiro 氏 (https://itouhiro.github.io/PixelMplus/)
+        ライセンス: M+ FONTS LICENSE (改変・再配布自由)
+        フォントファイルを assets/fonts/ に配置してください:
+          assets/fonts/PixelMplus10-Regular.ttf
+          assets/fonts/PixelMplus10-Bold.ttf
+    -->
+    <style>
+        @font-face {
+            font-family: 'PixelMplus';
+            src: url('assets/fonts/PixelMplus10-Regular.ttf') format('truetype');
+            font-weight: normal;
+        }
+        @font-face {
+            font-family: 'PixelMplus';
+            src: url('assets/fonts/PixelMplus10-Bold.ttf') format('truetype');
+            font-weight: bold;
+        }
+    </style>
+
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+    <style>
+        /* ══════════════════════════════════════════════════
+           90s Industrial LCD — Mobile Edition
+           Pink Bronson 1.0 | Blue_Rayban mobile.html
+        ══════════════════════════════════════════════════ */
+        :root {
+            --bg:        #1C1C1C;
+            --panel:     #242424;
+            --lcd-bg:    #141800;
+            --lcd-fg:    #AABF00;
+            --lcd-dim:   #485400;
+            --border:    #363636;
+            --btn-bg:    #2A2A2A;
+            --led-on:    #33CC00;
+            --led-red:   #BB1100;
+            --head:      #D0D0D0;
+            --muted:     #606060;
+            --accent:    #AABF00;
+            --font:      'PixelMplus', 'Courier New', monospace;
+            --font-sans: 'Noto Sans JP', 'PixelMplus', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--lcd-fg);
+            font-family: var(--font);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ── ヘッダー ── */
+        .header {
+            background: var(--panel);
+            border-bottom: 2px solid var(--border);
+            padding: 8px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .led {
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            background: var(--led-on);
+            box-shadow: 0 0 6px var(--led-on);
+            flex-shrink: 0;
+        }
+
+        .header-title {
+            font-size: 1em;
+            font-weight: bold;
+            color: var(--head);
+            letter-spacing: 1px;
+        }
+
+        .header-sub {
+            font-size: 0.65em;
+            color: var(--muted);
+            margin-left: auto;
+        }
+
+        /* ── Twitch 埋め込み ── */
+        .stream-wrapper {
+            width: 100%;
+            background: #000;
+            position: relative;
+        }
+
+        .stream-wrapper iframe {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            border: none;
+            display: block;
+        }
+
+        /* ── ゴールデンチェーン パネル ── */
+        .gc-panel {
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            padding: 6px 12px;
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .gc-card {
+            flex-shrink: 0;
+            background: var(--lcd-bg);
+            border: 1px solid var(--lcd-dim);
+            border-radius: 4px;
+            padding: 6px 10px;
+            min-width: 180px;
+            max-width: 260px;
+        }
+
+        .gc-card-label {
+            font-size: 0.6em;
+            color: var(--lcd-dim);
+            letter-spacing: 1px;
+            margin-bottom: 3px;
+        }
+
+        .gc-card-text {
+            font-size: 0.75em;
+            color: var(--lcd-fg);
+            line-height: 1.5;
+            word-break: break-all;
+            font-family: var(--font-sans);
+        }
+
+        /* ── チャット セクション ── */
+        .chat-section-header {
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            padding: 5px 12px;
+            font-size: 0.65em;
+            color: var(--lcd-dim);
+            letter-spacing: 2px;
+        }
+
+        #chat-scroll {
+            height: calc(100vh - 0px);  /* JS で動的に設定 */
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 8px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        /* ── チャットメッセージ ── */
+        .chat-item {
+            background: var(--lcd-bg);
+            border: 1px solid var(--lcd-dim);
+            border-radius: 4px;
+            padding: 6px 10px;
+            animation: slideUp 0.3s ease forwards;
+            opacity: 0;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .chat-meta {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 3px;
+            flex-wrap: wrap;
+        }
+
+        .chat-avatar {
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 1px solid var(--lcd-dim);
+            flex-shrink: 0;
+        }
+
+        .chat-avatar-ph {
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            border: 1px solid var(--lcd-dim);
+            background: var(--btn-bg);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px;
+            flex-shrink: 0;
+        }
+
+        .chat-badge {
+            width: 14px; height: 14px;
+            object-fit: contain; vertical-align: middle;
+        }
+
+        .chat-name {
+            font-weight: bold;
+            font-size: 0.75em;
+            color: var(--head);
+        }
+
+        .chat-time {
+            font-size: 0.6em;
+            color: var(--muted);
+            margin-left: auto;
+        }
+
+        .chat-lang-badge {
+            font-size: 0.55em;
+            background: var(--lcd-dim);
+            color: var(--lcd-bg);
+            border-radius: 3px;
+            padding: 1px 4px;
+        }
+
+        .chat-main {
+            font-family: var(--font-sans);
+            font-size: 0.85em;
+            line-height: 1.5;
+            color: var(--lcd-fg);
+            word-break: break-word;
+        }
+
+        .chat-original {
+            font-size: 0.7em;
+            color: var(--lcd-dim);
+            margin-top: 2px;
+            font-family: var(--font-sans);
+            word-break: break-word;
+        }
+
+        .tl-icon { font-size: 0.8em; margin-right: 2px; }
+
+        /* ── 接続状態バー ── */
+        .status-bar {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: var(--panel);
+            border-top: 1px solid var(--border);
+            padding: 4px 12px;
+            font-size: 0.6em;
+            color: var(--muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: var(--led-on);
+            margin-right: 4px;
+        }
+
+        .status-dot.error { background: var(--led-red); }
+    </style>
+</head>
+<body>
+
+<!-- ヘッダー -->
+<div class="header">
+    <div class="led" id="led"></div>
+    <div class="header-title">BLUE_RAY-BAN  //  MOBILE VIEW</div>
+    <div class="header-sub">seyak2b LIVE</div>
+</div>
+
+<!-- Twitch 配信埋め込み -->
+<div class="stream-wrapper">
+    <iframe id="twitch-embed" allowfullscreen></iframe>
+</div>
+
+<!-- Golden Chain パネル -->
+<div class="gc-panel" id="gc-panel">
+    <div class="gc-card" id="gc-summary">
+        <div class="gc-card-label">▸ SUMMARY</div>
+        <div class="gc-card-text" id="gc-summary-text">接続待機中...</div>
+    </div>
+    <div class="gc-card" id="gc-title">
+        <div class="gc-card-label">▸ TITLE</div>
+        <div class="gc-card-text" id="gc-title-text">—</div>
+    </div>
+    <div class="gc-card" id="gc-facilitator">
+        <div class="gc-card-label">▸ TOPIC</div>
+        <div class="gc-card-text" id="gc-facilitator-text">—</div>
+    </div>
+</div>
+
+<!-- チャットエリア -->
+<div class="chat-section-header">CHAT  //  REALTIME TRANSLATION FEED</div>
+<div id="chat-scroll"></div>
+
+<!-- ステータスバー -->
+<div class="status-bar">
+    <span><span class="status-dot" id="fb-dot"></span> <span id="fb-status">Firebase 接続中...</span></span>
+    <span id="msg-count">0 messages</span>
+</div>
+
+<script>
+    /* =====================================================
+       Pink Bronson 1.0 — mobile.html
+       Firebase Realtime Database → リアルタイムチャット表示
+       + Golden Chain サマリーパネル
+       + Twitch 配信埋め込み
+    ===================================================== */
+
+    // ── Twitch 埋め込み（hostname に応じて parent を自動設定）
+    (function() {
+        const ch = 'seyak2b';
+        const parent = location.hostname || 'localhost';
+        const src = `https://player.twitch.tv/?channel=${ch}&parent=${encodeURIComponent(parent)}&autoplay=true&muted=false`;
+        document.getElementById('twitch-embed').src = src;
+    })();
+
+    // ── チャット欄の高さを動的に調整
+    function resizeChatArea() {
+        const header  = document.querySelector('.header').offsetHeight;
+        const stream  = document.querySelector('.stream-wrapper').offsetHeight;
+        const gcPanel = document.querySelector('.gc-panel').offsetHeight;
+        const chatHdr = document.querySelector('.chat-section-header').offsetHeight;
+        const statusBar = document.querySelector('.status-bar').offsetHeight;
+        const remaining = window.innerHeight - header - stream - gcPanel - chatHdr - statusBar - 8;
+        document.getElementById('chat-scroll').style.height = Math.max(120, remaining) + 'px';
+    }
+    window.addEventListener('resize', resizeChatArea);
+    window.addEventListener('load', resizeChatArea);
+    setTimeout(resizeChatArea, 500); // iframe 読み込み後
+
+    // ── Firebase 設定
+    const firebaseConfig = {
+        apiKey:      "AIzaSyAjkMsdvypCH4BsoNcjSNp8GX6_bLbKsA8",
+        authDomain:  "seya-chat-trans.firebaseapp.com",
+        databaseURL: "https://seya-chat-trans-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId:   "seya-chat-trans"
+    };
+
+    let database;
+    try {
+        firebase.initializeApp(firebaseConfig);
+        database = firebase.database();
+        document.getElementById('fb-status').textContent = 'Firebase 接続完了';
+        document.getElementById('led').style.boxShadow = '0 0 6px #33CC00';
+        console.log('✅ Firebase 初期化完了');
+    } catch (e) {
+        document.getElementById('fb-dot').classList.add('error');
+        document.getElementById('fb-status').textContent = 'Firebase 接続失敗: ' + e.message;
+        console.error('Firebase 初期化失敗:', e);
+    }
+
+    // ── ページ読み込み時刻（過去チャット除外）
+    const pageLoadTime = Date.now();
+    const shownKeys    = new Set();
+    let msgCount       = 0;
+    const chatScroll   = document.getElementById('chat-scroll');
+
+    // ── 時刻フォーマット
+    function fmtTime(ts) {
+        const d = ts ? new Date(ts) : new Date();
+        return d.getHours().toString().padStart(2, '0') + ':' +
+               d.getMinutes().toString().padStart(2, '0');
+    }
+
+    // ── テキストを安全にエスケープ
+    function esc(s) {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    // ── チャットメッセージを追加
+    function addChat(data, key) {
+        if (shownKeys.has(key)) return;
+        shownKeys.add(key);
+        if (shownKeys.size > 300) {
+            const arr = [...shownKeys];
+            shownKeys.clear();
+            arr.slice(-150).forEach(k => shownKeys.add(k));
+        }
+
+        if (data.timestamp && data.timestamp < pageLoadTime) return;
+
+        const name    = esc(data.display_name || data.user || '名無し');
+        const origTxt = esc(data.text || '');
+        const transTxt = esc(data.translated_text || '');
+        const isTranslated = data.is_translated && transTxt;
+        const mainTxt = isTranslated ? transTxt : origTxt;
+        const imgUrl  = data.profile_image_url || '';
+        const badges  = data.badges || [];
+        const lang    = data.lang || '';
+        const source  = data.source || 'twitch';
+        const timeStr = fmtTime(data.timestamp);
+
+        const iconHtml = imgUrl
+            ? `<img src="${imgUrl}" class="chat-avatar" onerror="this.outerHTML='<div class=\\'chat-avatar-ph\\'>👤</div>'">`
+            : `<div class="chat-avatar-ph">👤</div>`;
+
+        const badgesHtml = badges
+            .map(b => `<img src="${esc(b)}" class="chat-badge" alt="">`)
+            .join('');
+
+        const langBadge = lang
+            ? `<span class="chat-lang-badge">${esc(lang)}</span>`
+            : '';
+        const sourceBadge = source === 'rolex'
+            ? `<span class="chat-lang-badge" style="background:#2a3a00">📡</span>`
+            : '';
+
+        const origHtml = isTranslated
+            ? `<div class="chat-original"><span class="tl-icon">🌐</span>${origTxt}</div>`
+            : '';
+
+        const el = document.createElement('div');
+        el.className = 'chat-item';
+        el.innerHTML = `
+            <div class="chat-meta">
+                ${iconHtml}
+                ${badgesHtml}
+                <span class="chat-name">${name}</span>
+                ${langBadge}${sourceBadge}
+                <span class="chat-time">${timeStr}</span>
+            </div>
+            <div class="chat-main">${mainTxt}</div>
+            ${origHtml}
+        `;
+
+        chatScroll.appendChild(el);
+        el.addEventListener('animationend', () => {
+            el.style.animation = 'none';
+            el.style.opacity = '1';
+        }, { once: true });
+
+        // 最大 40 件表示
+        while (chatScroll.children.length > 40) {
+            chatScroll.removeChild(chatScroll.firstChild);
+        }
+
+        chatScroll.scrollTop = chatScroll.scrollHeight;
+        msgCount++;
+        document.getElementById('msg-count').textContent = msgCount + ' messages';
+        resizeChatArea();
+    }
+
+    // ── Firebase チャット監視
+    if (database) {
+        database.ref('chats')
+            .limitToLast(30)
+            .on('child_added', (snapshot) => {
+                addChat(snapshot.val(), snapshot.key);
+            });
+
+        // ── Golden Chain パネル監視
+        function watchGC(key, elId) {
+            database.ref(`golden_chain/${key}`).on('value', (snap) => {
+                const data = snap.val();
+                if (data && data.text) {
+                    const el = document.getElementById(elId);
+                    if (el) {
+                        el.textContent = data.text;
+                        el.parentElement.style.borderColor = '#AABF00';
+                        setTimeout(() => {
+                            el.parentElement.style.borderColor = '#485400';
+                        }, 2000);
+                    }
+                }
+            });
+        }
+
+        watchGC('summary',     'gc-summary-text');
+        watchGC('title',       'gc-title-text');
+        watchGC('facilitator', 'gc-facilitator-text');
+
+        document.getElementById('fb-dot').style.background = '#33CC00';
+        document.getElementById('fb-status').textContent = 'LIVE';
+    }
+
+    console.log('✅ Pink Bronson Mobile View 準備完了');
+</script>
+</body>
+</html>

@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Chat Display Settings</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap"
+        rel="stylesheet">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <style>
+        :root {
+            --bg: #1a1f0e;
+            --surface: #242b14;
+            --surface2: #2e381a;
+            --accent: #7aaa35;
+            --accent2: #5a7a25;
+            --text: #e8f5d0;
+            --text-muted: #8aaa60;
+            --border: rgba(122, 170, 53, 0.3);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Noto Sans JP', sans-serif;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 28px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        header .logo {
+            font-size: 28px;
+        }
+
+        header h1 {
+            font-size: 1.4em;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        header p {
+            font-size: 0.8em;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 800px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+        }
+
+        .card-title {
+            font-size: 0.8em;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 18px;
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .row label {
+            font-size: 0.88em;
+            color: var(--text);
+            flex-shrink: 0;
+            min-width: 110px;
+        }
+
+        .row .hint {
+            font-size: 0.75em;
+            color: var(--text-muted);
+        }
+
+        /* Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            flex: 1;
+            height: 6px;
+            background: var(--surface2);
+            border-radius: 3px;
+            outline: none;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .val-display {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82em;
+            color: var(--accent);
+            min-width: 46px;
+            text-align: right;
+        }
+
+        /* Color picker */
+        input[type=color] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 44px;
+            height: 28px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            background: none;
+            cursor: pointer;
+            padding: 2px;
+        }
+
+        input[type=color]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+
+        input[type=color]::-webkit-color-swatch {
+            border: none;
+            border-radius: 5px;
+        }
+
+        /* Toggle switch */
+        .toggle-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toggle {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider-toggle {
+            position: absolute;
+            inset: 0;
+            background: var(--surface2);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .slider-toggle::before {
+            content: '';
+            position: absolute;
+            left: 3px;
+            top: 3px;
+            width: 18px;
+            height: 18px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+
+        .toggle input:checked+.slider-toggle {
+            background: var(--accent);
+        }
+
+        .toggle input:checked+.slider-toggle::before {
+            transform: translateX(20px);
+        }
+
+        /* Select */
+        select {
+            background: var(--surface2);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 0.85em;
+            cursor: pointer;
+            outline: none;
+        }
+
+        /* Preview box */
+        #preview-area {
+            grid-column: 1 / -1;
+        }
+
+        #preview-box {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 12px;
+            min-height: 180px;
+            display: flex;
+            align-items: flex-end;
+            padding: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .preview-bg-label {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.75em;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .preview-chat {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .preview-message {
+            border-radius: 14px;
+            padding: 10px 14px 10px 10px;
+            color: #fff;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            max-width: 480px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .preview-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .preview-body {
+            flex: 1;
+        }
+
+        .preview-header {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            margin-bottom: 4px;
+            font-size: 0.82em;
+            font-weight: bold;
+            color: #d5f0a0;
+        }
+
+        .preview-text {
+            font-size: 1em;
+            line-height: 1.4;
+        }
+
+        /* Buttons */
+        .btn-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 22px;
+            border-radius: 10px;
+            border: none;
+            font-family: inherit;
+            font-size: 0.9em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #1a1f0e;
+        }
+
+        .btn-primary:hover {
+            background: #8fc040;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--surface2);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--surface);
+        }
+
+        .saved-toast {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85em;
+            color: var(--accent);
+            opacity: 0;
+            transition: opacity 0.3s;
+            margin-top: 10px;
+        }
+
+        .saved-toast.show {
+            opacity: 1;
+        }
+
+        .color-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex: 1;
+            justify-content: flex-end;
+        }
+
+        /* カスタムプロンプトカード専用スタイル */
+        .prompt-textarea {
+            width: 100%;
+            min-height: 80px;
+            resize: vertical;
+            background: var(--surface2);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-family: 'Noto Sans JP', sans-serif;
+            font-size: 0.88em;
+            line-height: 1.6;
+            outline: none;
+            margin-top: 8px;
+            transition: border-color 0.2s;
+        }
+
+        .prompt-textarea:focus {
+            border-color: var(--accent);
+        }
+
+        .preset-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            margin-top: 12px;
+        }
+
+        .preset-btn {
+            padding: 5px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--surface2);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.82em;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .preset-btn:hover {
+            background: var(--accent);
+            color: #1a1f0e;
+            border-color: var(--accent);
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <span class="logo">🎨</span>
+        <div>
+            <h1>Chat Display Settings</h1>
+            <p>index.html に反映されます。設定は自動保存されます。</p>
+        </div>
+    </header>
+
+    <div class="layout">
+
+        <!-- 見た目 -->
+        <div class="card">
+            <div class="card-title">🎨 カラー・グラデーション</div>
+
+            <div class="row">
+                <label>グラデーション 色1</label>
+                <div class="color-row">
+                    <input type="color" id="gradColor1" value="#3a4a1a">
+                    <span class="hint">内側</span>
+                </div>
+            </div>
+            <div class="row">
+                <label>グラデーション 色2</label>
+                <div class="color-row">
+                    <input type="color" id="gradColor2" value="#5a7a25">
+                    <span class="hint">中間</span>
+                </div>
+            </div>
+            <div class="row">
+                <label>グラデーション 色3</label>
+                <div class="color-row">
+                    <input type="color" id="gradColor3" value="#7aaa35">
+                    <span class="hint">外側</span>
+                </div>
+            </div>
+            <div class="row">
+                <label>テキストの色</label>
+                <div class="color-row">
+                    <input type="color" id="textColor" value="#ffffff">
+                </div>
+            </div>
+            <div class="row">
+                <label>名前の色</label>
+                <div class="color-row">
+                    <input type="color" id="nameColor" value="#d5f0a0">
+                </div>
+            </div>
+        </div>
+
+        <!-- シェイプ -->
+        <div class="card">
+            <div class="card-title">📐 サイズ・形状</div>
+
+            <div class="row">
+                <label>フォントサイズ</label>
+                <input type="range" id="fontSize" min="11" max="24" value="16" step="1">
+                <span class="val-display" id="fontSizeVal">16px</span>
+            </div>
+            <div class="row">
+                <label>角の丸さ</label>
+                <input type="range" id="borderRadius" min="0" max="30" value="14" step="1">
+                <span class="val-display" id="borderRadiusVal">14px</span>
+            </div>
+            <div class="row">
+                <label>パネル幅</label>
+                <input type="range" id="chatWidth" min="260" max="700" value="480" step="10">
+                <span class="val-display" id="chatWidthVal">480px</span>
+            </div>
+            <div class="row">
+                <label>アイコンサイズ</label>
+                <input type="range" id="iconSize" min="24" max="70" value="44" step="2">
+                <span class="val-display" id="iconSizeVal">44px</span>
+            </div>
+            <div class="row">
+                <label>影の強さ</label>
+                <input type="range" id="shadowOpacity" min="0" max="60" value="40" step="5">
+                <span class="val-display" id="shadowOpacityVal">40%</span>
+            </div>
+        </div>
+
+        <!-- アニメーション -->
+        <div class="card">
+            <div class="card-title">✨ アニメーション</div>
+
+            <div class="row">
+                <label>アニメ種類</label>
+                <select id="animType">
+                    <option value="slide">スライドイン（下から）</option>
+                    <option value="fadein">フェードイン</option>
+                    <option value="scale">ポップアップ（拡大）</option>
+                </select>
+            </div>
+            <div class="row">
+                <label>スピード</label>
+                <input type="range" id="animDuration" min="0.15" max="1.5" value="0.45" step="0.05">
+                <span class="val-display" id="animDurationVal">0.45s</span>
+            </div>
+            <div class="row">
+                <label>消えるまで</label>
+                <input type="range" id="fadeOutDelay" min="5" max="60" value="0" step="5">
+                <span class="val-display" id="fadeOutDelayVal">なし</span>
+            </div>
+            <div class="row">
+                <label>最大表示件数</label>
+                <input type="range" id="maxMessages" min="3" max="30" value="20" step="1">
+                <span class="val-display" id="maxMessagesVal">20件</span>
+            </div>
+            <div class="row" style="border-top:1px solid var(--border); padding-top:14px; margin-top:4px;">
+                <label style="display:flex; flex-direction:column; gap:2px;">
+                    <span>📚 積み上げモード</span>
+                    <span
+                        style="font-size:0.75em; color:var(--text-muted); font-weight:normal;">ONにするとメッセージが消えず上に積み上がります<br>（OBSでチャット欄風のレイアウト向け）</span>
+                </label>
+                <label class="toggle">
+                    <input type="checkbox" id="stackMode">
+                    <span class="slider-toggle"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- 表示項目 -->
+        <div class="card">
+            <div class="card-title">👁 表示項目</div>
+
+            <div class="row">
+                <label>アイコン表示</label>
+                <label class="toggle">
+                    <input type="checkbox" id="showIcons" checked>
+                    <span class="slider-toggle"></span>
+                </label>
+            </div>
+            <div class="row">
+                <label>バッジ表示</label>
+                <label class="toggle">
+                    <input type="checkbox" id="showBadges" checked>
+                    <span class="slider-toggle"></span>
+                </label>
+            </div>
+            <div class="row">
+                <label>名前表示</label>
+                <label class="toggle">
+                    <input type="checkbox" id="showName" checked>
+                    <span class="slider-toggle"></span>
+                </label>
+            </div>
+            <div class="row">
+                <label>タイムスタンプ</label>
+                <label class="toggle">
+                    <input type="checkbox" id="showTime" checked>
+                    <span class="slider-toggle"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- 🌐 翻訳設定 -->
+        <div class="card">
+            <div class="card-title">🌐 翻訳設定（Gemini AI）</div>
+
+            <div class="row">
+                <label>翻訳機能</label>
+                <label class="toggle">
+                    <input type="checkbox" id="translationEnabled" checked>
+                    <span class="slider-toggle"></span>
+                </label>
+            </div>
+            <div class="row">
+                <label>原文の表示位置</label>
+                <select id="originalTextPosition">
+                    <option value="right">翻訳文の右側（横並び）</option>
+                    <option value="left">翻訳文の左側（横並び）</option>
+                    <option value="above">翻訳文の上に表示</option>
+                    <option value="below">翻訳文の下に表示</option>
+                    <option value="hidden">表示しない</option>
+                </select>
+            </div>
+            <div class="row">
+                <label>原文の文字色</label>
+                <div class="color-row">
+                    <input type="color" id="originalTextColor" value="#b0cca0">
+                </div>
+            </div>
+            <div class="row">
+                <label>原文のフォントサイズ</label>
+                <input type="range" id="originalFontSize" min="9" max="20" value="12" step="1">
+                <span class="val-display" id="originalFontSizeVal">12px</span>
+            </div>
+            <div class="row">
+                <label>🌐ラベル表示</label>
+                <label class="toggle">
+                    <input type="checkbox" id="showTranslationLabel" checked>
+                    <span class="slider-toggle"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- 🤖 翻訳プロンプト設定（全幅カード）-->
+        <div class="card" style="grid-column: 1 / -1;">
+            <div class="card-title">🤖 Gemini 翻訳プロンプト（翻訳スタイルを自由に指定）</div>
+
+            <div style="font-size:0.85em; color:var(--text-muted); margin-bottom:8px;">
+                日本語以外のチャットを <strong style="color:var(--accent)">どんな言葉で翻訳するか</strong> 指定できます。
+                空欄だと通常の日本語に翻訳されます。
+            </div>
+
+            <!-- GeminiのON/OFFスイッチ -->
+            <div class="row"
+                style="margin-top:14px; margin-bottom:14px; border-bottom: 1px dotted #ccc; padding-bottom: 14px;">
+                <label style="display:flex; flex-direction:column; gap:3px;">
+                    <span>🤖 AIを使用して翻訳する（Gemini）</span>
+                    <span style="font-size:0.78em; color:var(--text-muted); font-weight:normal;">
+                        OFFにするとAPIに送信されず、翻訳も行われません（ミニモードのみ使用する場合などにAPIコストを節約できます）
+                    </span>
+                </label>
+                <label class="toggle">
+                    <input type="checkbox" id="useGemini" checked>
+                    <span class="slider-toggle"></span>
+                </label>
+            </div>
+
+            <!-- プリセットボタン -->
+            <div class="preset-grid" id="presetGrid">
+                <button class="preset-btn" onclick="setPreset('', 'デフォルト')">🔄 デフォルト（普通の日本語）</button>
+                <button class="preset-btn"
+                    onclick="setPreset('ギャル語っぽい話し方で翻訳してください。「マジ」「ウケる」「ヤバい」などギャル言葉を積極的に使ってください。', 'ギャル語')">💅
+                    ギャル語</button>
+                <button class="preset-btn" onclick="setPreset('武士語（古文調・「〜でござる」「〜じゃ」「〜候」など）に変換してください。', '武士語')">⚔️
+                    武士語</button>
+                <button class="preset-btn"
+                    onclick="setPreset('関西弁（大阪弁）に変換してください。「〜やで」「〜やろ」「なんでやねん」などを使ってください。', '関西弁')">🐙 関西弁</button>
+                <button class="preset-btn" onclick="setPreset('丁寧な敬語に翻訳してください。ビジネスシーンで使えるような丁寧な日本語にしてください。', '敬語')">👔
+                    敬語</button>
+                <button class="preset-btn"
+                    onclick="setPreset('小学生でも分かるような簡単でかわいい言葉に変換してください。難しい漢字は使わないでください。', '子ども向け')">🎈 子ども向け</button>
+                <button class="preset-btn" onclick="setPreset('ポジティブで元気いっぱいな言葉に変換してください。語尾に「！」や「✨」をつけてください。', '元気系')">⚡
+                    元気系</button>
+                <button class="preset-btn"
+                    onclick="setPreset('ツンデレっぽい言葉に変換してください。照れながらも本音が出るような言い方にしてください。', 'ツンデレ')">😤 ツンデレ</button>
+            </div>
+
+            <!-- カスタム入力欄 -->
+            <div style="margin-top:14px; font-size:0.85em; color:var(--text-muted);">✏️ または自分でプロンプトを書く</div>
+            <textarea class="prompt-textarea" id="customPrompt"
+                placeholder="例: ギャル語に変換してください&#10;例: 博多弁に変換してください&#10;例: すべての語尾に「にゃ」をつけてください"></textarea>
+
+            <!-- 日本語にも適用トグル -->
+            <div class="row" style="margin-top:14px; margin-bottom:0;">
+                <label style="display:flex; flex-direction:column; gap:3px;">
+                    <span>🇯🇵 日本語にも適用</span>
+                    <span style="font-size:0.78em; color:var(--text-muted); font-weight:normal;">
+                        ONにすると日本語のチャットもスタイル変換します<br>
+                        （例: 日本語の「こんにちは」→ギャル語「マジこんにちは！」）
+                    </span>
+                </label>
+                <label class="toggle">
+                    <input type="checkbox" id="applyToJapanese">
+                    <span class="slider-toggle"></span>
+                </label>
+            </div>
+
+            <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:0.8em; color:var(--text-muted);">現在のスタイル: <strong id="currentStyleLabel"
+                        style="color:var(--accent);">読み込み中...</strong></span>
+                <button class="btn btn-primary" onclick="savePrompt()" style="padding:7px 18px; font-size:0.85em;">🤖
+                    この設定を適用</button>
+            </div>
+        </div>
+
+        <!-- 🪟 ミニモード設定 -->
+        <div class="card" style="grid-column: 1 / -1;">
+            <div class="card-title">🪟 ミニモード設定（index_mini.html）</div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+                <div style="font-size:0.85em; color:var(--text-muted);">
+                    OBSで小さく表示するミニチャットの設定です。<br>
+                    変更は即座に保存されます（ミニモード画面に自動反映）。
+                </div>
+                <a href="settings_mini.html"
+                    style="padding:7px 16px; background:var(--surface2); color:var(--accent); border:1px solid var(--border);
+                           border-radius:8px; text-decoration:none; font-size:0.83em; font-weight:700; white-space:nowrap;">
+                    🔧 詳細設定ページへ →
+                </a>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px;">
+
+                <!-- デザイン -->
+                <div>
+                    <div
+                        style="font-size:0.78em; font-weight:700; color:var(--text-muted); letter-spacing:0.08em; text-transform:uppercase; margin-bottom:12px;">
+                        🎨 デザイン</div>
+                    <div class="row">
+                        <label>デザインテーマ</label>
+                        <select id="mini_designTheme">
+                            <option value="modern">モダン（標準）</option>
+                            <option value="retro">レトロピクセル</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <label>文字サイズ</label>
+                        <input type="range" id="mini_fontSize" min="10" max="40" step="1" style="flex:1;">
+                        <span class="val-display" id="mini_fontSizeVal">16px</span>
+                    </div>
+                    <div class="row">
+                        <label>アイコンサイズ</label>
+                        <input type="range" id="mini_iconSize" min="16" max="64" step="2" style="flex:1;">
+                        <span class="val-display" id="mini_iconSizeVal">32px</span>
+                    </div>
+                    <div class="row">
+                        <label>角丸</label>
+                        <input type="range" id="mini_borderRadius" min="0" max="40" step="1" style="flex:1;">
+                        <span class="val-display" id="mini_borderRadiusVal">20px</span>
+                    </div>
+                </div>
+
+                <!-- 表示 -->
+                <div>
+                    <div
+                        style="font-size:0.78em; font-weight:700; color:var(--text-muted); letter-spacing:0.08em; text-transform:uppercase; margin-bottom:12px;">
+                        👁 表示切り替え</div>
+                    <div class="row">
+                        <label>ユーザー名</label>
+                        <label class="toggle"><input type="checkbox" id="mini_showName"><span
+                                class="slider-toggle"></span></label>
+                    </div>
+                    <div class="row">
+                        <label>アイコン</label>
+                        <label class="toggle"><input type="checkbox" id="mini_showIcons"><span
+                                class="slider-toggle"></span></label>
+                    </div>
+                    <div class="row">
+                        <label>バッジ</label>
+                        <label class="toggle"><input type="checkbox" id="mini_showBadges"><span
+                                class="slider-toggle"></span></label>
+                    </div>
+                    <div class="row">
+                        <label>積み上げモード</label>
+                        <label class="toggle"><input type="checkbox" id="mini_stackMode"><span
+                                class="slider-toggle"></span></label>
+                    </div>
+                </div>
+
+                <!-- アニメ -->
+                <div>
+                    <div
+                        style="font-size:0.78em; font-weight:700; color:var(--text-muted); letter-spacing:0.08em; text-transform:uppercase; margin-bottom:12px;">
+                        ✨ アニメ・挙動</div>
+                    <div class="row">
+                        <label>消えるまで</label>
+                        <input type="range" id="mini_fadeOutDelay" min="0" max="120" step="5" style="flex:1;">
+                        <span class="val-display" id="mini_fadeOutDelayVal">なし</span>
+                    </div>
+                    <div class="row">
+                        <label>最大表示数</label>
+                        <input type="range" id="mini_maxMessages" min="1" max="100" step="1" style="flex:1;">
+                        <span class="val-display" id="mini_maxMessagesVal">50件</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top:14px; display:flex; justify-content:flex-end; gap:10px; align-items:center;">
+                <div class="saved-toast" id="miniSavedToast">✅ ミニモード設定を保存しました！</div>
+                <button class="btn btn-primary" onclick="saveMiniSettings()" style="padding:8px 20px;">
+                    💾 ミニモード設定を保存
+                </button>
+            </div>
+        </div>
+
+        <!-- プレビュー -->
+        <div class="card" id="preview-area">
+            <div class="card-title">🖥 プレビュー（リアルタイム）</div>
+            <div id="preview-box">
+                <span class="preview-bg-label">OBS等に重ねたときのイメージ</span>
+                <div class="preview-chat">
+                    <div class="preview-message" id="prev1">
+                        <div class="preview-icon" id="prev1-icon">😊</div>
+                        <div class="preview-body">
+                            <div class="preview-header">
+                                <span id="prev1-badges">🎙️⭐</span>
+                                <span id="prev1-name">seyak2b</span>
+                                <span id="prev1-time"
+                                    style="font-weight:normal;color:rgba(255,255,255,0.4);font-size:0.85em">21:04</span>
+                            </div>
+                            <div class="preview-text" id="prev1-text">テストコメントです！こんにちは！</div>
+                        </div>
+                    </div>
+                    <div class="preview-message" id="prev2">
+                        <div class="preview-icon" id="prev2-icon">🐱</div>
+                        <div class="preview-body">
+                            <div class="preview-header">
+                                <span id="prev2-badges">🔧</span>
+                                <span id="prev2-name">ashu_tw</span>
+                                <span id="prev2-time"
+                                    style="font-weight:normal;color:rgba(255,255,255,0.4);font-size:0.85em">21:05</span>
+                            </div>
+                            <div class="preview-text" id="prev2-text">配信お疲れさまです！</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-primary" onclick="saveSettings()">💾 保存して適用</button>
+                <button class="btn btn-secondary" onclick="resetSettings()">↩ デフォルトに戻す</button>
+                <button class="btn btn-secondary" id="testModeBtn" onclick="openTestMode()"
+                    style="background:#1a3a4a; border-color:rgba(53,170,200,0.4); color:#88ddff;">🧪
+                    OBSテストモード起動</button>
+            </div>
+            <div class="saved-toast" id="savedToast">✅ 設定を保存しました！ index.html を再読み込みすると反映されます。</div>
+        </div>
+
+    </div>
+
+    <script>
+        /* =========================================
+           設定コントロールパネルのJavaScript
+           ========================================= */
+
+        // デフォルト設定値（リセット時に使います）
+        const DEFAULTS = {
+            gradColor1: '#3a4a1a',
+            gradColor2: '#5a7a25',
+            gradColor3: '#7aaa35',
+            textColor: '#ffffff',
+            nameColor: '#d5f0a0',
+            fontSize: 16,
+            borderRadius: 14,
+            chatWidth: 480,
+            iconSize: 44,
+            shadowOpacity: 40,
+            animType: 'slide',
+            animDuration: 0.45,
+            fadeOutDelay: 0,
+            maxMessages: 20,
+            stackMode: false,
+            showIcons: true,
+            showBadges: true,
+            showName: true,
+            showTime: true,
+            // 翻訳設定
+            translationEnabled: true,
+            originalTextPosition: 'right',
+            originalTextColor: '#b0cca0',
+            originalFontSize: 12,
+            showTranslationLabel: true,
+        };
+
+        // すべてのコントロール要素を定義します
+        const controls = [
+            { id: 'gradColor1', type: 'color' },
+            { id: 'gradColor2', type: 'color' },
+            { id: 'gradColor3', type: 'color' },
+            { id: 'textColor', type: 'color' },
+            { id: 'nameColor', type: 'color' },
+            { id: 'fontSize', type: 'range', displayId: 'fontSizeVal', suffix: 'px' },
+            { id: 'borderRadius', type: 'range', displayId: 'borderRadiusVal', suffix: 'px' },
+            { id: 'chatWidth', type: 'range', displayId: 'chatWidthVal', suffix: 'px' },
+            { id: 'iconSize', type: 'range', displayId: 'iconSizeVal', suffix: 'px' },
+            { id: 'shadowOpacity', type: 'range', displayId: 'shadowOpacityVal', suffix: '%' },
+            { id: 'animDuration', type: 'range', displayId: 'animDurationVal', suffix: 's' },
+            {
+                id: 'fadeOutDelay', type: 'range', displayId: 'fadeOutDelayVal', suffix: '',
+                displayFn: v => parseFloat(v) === 0 ? 'なし' : v + '秒後'
+            },
+            {
+                id: 'maxMessages', type: 'range', displayId: 'maxMessagesVal', suffix: '',
+                displayFn: v => v + '件'
+            },
+            { id: 'animType', type: 'select' },
+            { id: 'stackMode', type: 'checkbox' },
+            { id: 'showIcons', type: 'checkbox' },
+            { id: 'showBadges', type: 'checkbox' },
+            { id: 'showName', type: 'checkbox' },
+            { id: 'showTime', type: 'checkbox' },
+            // 翻訳設定
+            { id: 'translationEnabled', type: 'checkbox' },
+            { id: 'originalTextPosition', type: 'select' },
+            { id: 'originalTextColor', type: 'color' },
+            { id: 'originalFontSize', type: 'range', displayId: 'originalFontSizeVal', suffix: 'px' },
+            { id: 'showTranslationLabel', type: 'checkbox' },
+        ];
+
+        // 現在の設定値をすべてのコントロールから読み取ります
+        function readSettings() {
+            const s = {};
+            controls.forEach(c => {
+                const el = document.getElementById(c.id);
+                if (c.type === 'checkbox') s[c.id] = el.checked;
+                else if (c.type === 'range') s[c.id] = parseFloat(el.value);
+                else s[c.id] = el.value;
+            });
+            return s;
+        }
+
+        // 設定値をコントロールに書き込みます
+        function applyToControls(s) {
+            controls.forEach(c => {
+                const el = document.getElementById(c.id);
+                if (!el) return;
+                if (c.type === 'checkbox') el.checked = s[c.id];
+                else el.value = s[c.id];
+                if (c.displayId) updateDisplay(c);
+            });
+        }
+
+        // 数値の表示を更新します
+        function updateDisplay(ctrl) {
+            const el = document.getElementById(ctrl.id);
+            const disp = document.getElementById(ctrl.displayId);
+            if (!disp) return;
+            disp.textContent = ctrl.displayFn ? ctrl.displayFn(el.value) : el.value + ctrl.suffix;
+        }
+
+        // プレビューにリアルタイム反映します
+        function updatePreview() {
+            const s = readSettings();
+            const grad = `linear-gradient(135deg, ${s.gradColor1} 0%, ${s.gradColor2} 60%, ${s.gradColor3} 100%)`;
+            const shadow = `0 4px 12px rgba(0,0,0,${s.shadowOpacity / 100})`;
+
+            document.querySelectorAll('.preview-message').forEach(el => {
+                el.style.background = grad;
+                el.style.borderRadius = s.borderRadius + 'px';
+                el.style.boxShadow = shadow;
+                el.style.fontSize = s.fontSize + 'px';
+            });
+            document.querySelectorAll('.preview-text').forEach(el => {
+                el.style.color = s.textColor;
+            });
+            document.querySelectorAll('.preview-header span:nth-child(2)').forEach(el => {
+                el.style.color = s.nameColor;
+            });
+            document.querySelectorAll('.preview-icon').forEach(el => {
+                el.style.width = s.iconSize + 'px';
+                el.style.height = s.iconSize + 'px';
+                el.style.display = s.showIcons ? 'flex' : 'none';
+            });
+            document.querySelectorAll('[id$="-badges"]').forEach(el => {
+                el.style.display = s.showBadges ? '' : 'none';
+            });
+            document.querySelectorAll('[id$="-name"]').forEach(el => {
+                el.style.display = s.showName ? '' : 'none';
+            });
+            document.querySelectorAll('[id$="-time"]').forEach(el => {
+                el.style.display = s.showTime ? '' : 'none';
+            });
+            document.getElementById('preview-box').style.maxWidth = (s.chatWidth + 32) + 'px';
+        }
+
+        // LocalStorage に保存します
+        function saveSettings() {
+            const s = readSettings();
+            localStorage.setItem('chatSettings', JSON.stringify(s));
+            localStorage.setItem('chatSettingsUpdate', Date.now().toString());
+
+            const toast = document.getElementById('savedToast');
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // ---
+        // プロンプトプリセットをテキストエリアにセットします
+        function setPreset(text, label) {
+            document.getElementById('customPrompt').value = text;
+            savePrompt(text, label);
+        }
+
+        // プロンプトを Firebase に保存します
+        // Python の mainTST.py が30秒以内に自動で読み込みます
+        function savePrompt(promptText, styleLabel) {
+            const txt = promptText !== undefined ? promptText : document.getElementById('customPrompt').value.trim();
+            const label = styleLabel !== undefined ? styleLabel : (txt ? 'カスタム' : 'デフォルト');
+            const applyJp = document.getElementById('applyToJapanese').checked;
+            const useGemini = document.getElementById('useGemini').checked;
+
+            try {
+                database.ref('config').set({
+                    translation_prompt: txt,
+                    style_label: label,
+                    apply_to_japanese: applyJp,
+                    use_gemini: useGemini,
+                    updated_at: Date.now()
+                });
+                document.getElementById('currentStyleLabel').textContent = label || 'デフォルト（普通の日本語）';
+                // トースト
+                const toast = document.getElementById('savedToast');
+                toast.textContent = `🤖 翻訳スタイルを「${label}」に設定しました！30秒以内にPythonに反映されます。`;
+                toast.classList.add('show');
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    toast.textContent = '✅ 設定を保存しました！ index.html を再読み込みすると反映されます。';
+                }, 3000);
+            } catch (e) {
+                console.error('Firebase保存エラー:', e);
+            }
+        }
+
+        // ===== ミニモード設定 =====
+        const MINI_DEFAULTS = {
+            bgColor: 'rgba(30, 40, 20, 0.85)',
+            nameColor: '#d5f0a0',
+            fontSize: 16, borderRadius: 20, iconSize: 32,
+            fadeOutDelay: 0, maxMessages: 50,
+            stackMode: false, showIcons: true, showBadges: true,
+            showName: false, designTheme: 'modern'
+        };
+
+        const miniControls = [
+            { id: 'mini_designTheme', key: 'designTheme', type: 'select' },
+            { id: 'mini_fontSize', key: 'fontSize', type: 'range', dispId: 'mini_fontSizeVal', suffix: 'px' },
+            { id: 'mini_iconSize', key: 'iconSize', type: 'range', dispId: 'mini_iconSizeVal', suffix: 'px' },
+            { id: 'mini_borderRadius', key: 'borderRadius', type: 'range', dispId: 'mini_borderRadiusVal', suffix: 'px' },
+            { id: 'mini_showName', key: 'showName', type: 'checkbox' },
+            { id: 'mini_showIcons', key: 'showIcons', type: 'checkbox' },
+            { id: 'mini_showBadges', key: 'showBadges', type: 'checkbox' },
+            { id: 'mini_stackMode', key: 'stackMode', type: 'checkbox' },
+            {
+                id: 'mini_fadeOutDelay', key: 'fadeOutDelay', type: 'range', dispId: 'mini_fadeOutDelayVal',
+                displayFn: v => parseFloat(v) === 0 ? 'なし' : v + '秒後'
+            },
+            {
+                id: 'mini_maxMessages', key: 'maxMessages', type: 'range', dispId: 'mini_maxMessagesVal',
+                displayFn: v => v + '件'
+            },
+        ];
+
+        function loadMiniSettings() {
+            database.ref('chats_prompt/miniSettings').once('value').then(snap => {
+                let s = { ...MINI_DEFAULTS };
+                if (snap.exists()) s = { ...MINI_DEFAULTS, ...snap.val() };
+                else {
+                    const stored = localStorage.getItem('miniSettings');
+                    if (stored) try { s = { ...MINI_DEFAULTS, ...JSON.parse(stored) }; } catch (e) { }
+                }
+                miniControls.forEach(c => {
+                    const el = document.getElementById(c.id);
+                    if (!el) return;
+                    if (c.type === 'checkbox') el.checked = !!s[c.key];
+                    else el.value = s[c.key] ?? MINI_DEFAULTS[c.key];
+                    if (c.dispId) {
+                        const d = document.getElementById(c.dispId);
+                        if (d) d.textContent = c.displayFn ? c.displayFn(el.value) : el.value + c.suffix;
+                    }
+                });
+            });
+        }
+
+        function saveMiniSettings() {
+            const s = { ...MINI_DEFAULTS };
+            miniControls.forEach(c => {
+                const el = document.getElementById(c.id);
+                if (!el) return;
+                if (c.type === 'checkbox') s[c.key] = el.checked;
+                else if (c.type === 'range') s[c.key] = parseFloat(el.value);
+                else s[c.key] = el.value;
+            });
+            localStorage.setItem('miniSettings', JSON.stringify(s));
+            localStorage.setItem('miniSettingsUpdate', Date.now());
+            database.ref('chats_prompt/miniSettings').set(s).then(() => {
+                const t = document.getElementById('miniSavedToast');
+                t.classList.add('show');
+                setTimeout(() => t.classList.remove('show'), 3000);
+            });
+        }
+
+        // ミニモードコントロールのリアルタイム表示更新
+        miniControls.forEach(c => {
+            const el = document.getElementById(c.id);
+            if (!el || !c.dispId) return;
+            el.addEventListener('input', () => {
+                const d = document.getElementById(c.dispId);
+                if (d) d.textContent = c.displayFn ? c.displayFn(el.value) : el.value + c.suffix;
+            });
+        });
+
+        // デフォルトに戻します
+        function resetSettings() {
+            applyToControls(DEFAULTS);
+            updatePreview();
+        }
+
+        // OBSテストモードを別タブで起動します
+        function openTestMode() {
+            window.open('test_chat.html', '_blank');
+        }
+
+        // すべてのコントロールにイベントリスナーを設定します
+        controls.forEach(c => {
+            const el = document.getElementById(c.id);
+            if (!el) return;
+            el.addEventListener('input', () => {
+                if (c.displayId) updateDisplay(c);
+                updatePreview();
+            });
+            el.addEventListener('change', () => {
+                if (c.displayId) updateDisplay(c);
+                updatePreview();
+            });
+        });
+
+        // --- 初期化 ---
+        // 保存済みの設定があれば読み込み、なければデフォルトを使います
+        const stored = localStorage.getItem('chatSettings');
+        if (stored) {
+            try {
+                const parsed = JSON.parse(stored);
+                // デフォルトとマージして、欠けているキーはデフォルト値で補完します
+                applyToControls({ ...DEFAULTS, ...parsed });
+            } catch (e) {
+                applyToControls(DEFAULTS);
+            }
+        } else {
+            applyToControls(DEFAULTS);
+        }
+        updatePreview();
+
+        // --- Firebase 初期化 ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAjkMsdvypCH4BsoNcjSNp8GX6_bLbKsA8",
+            authDomain: "seya-chat-trans.firebaseapp.com",
+            databaseURL: "https://seya-chat-trans-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "seya-chat-trans"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // 現在のプロンプト設定をFirebaseから読み込みます
+        database.ref('config').once('value', snap => {
+            const data = snap.val() || {};
+            document.getElementById('customPrompt').value = data.translation_prompt || '';
+            document.getElementById('applyToJapanese').checked = !!data.apply_to_japanese;
+            const label = data.style_label || 'デフォルト（普通の日本語）';
+            const applyJp = data.apply_to_japanese ? '・日本語にも適用' : '';
+            document.getElementById('currentStyleLabel').textContent = label + applyJp;
+        });
+
+        // ミニモード設定を読み込みます
+        loadMiniSettings();
+    </script>
+</body>
+
+</html>
