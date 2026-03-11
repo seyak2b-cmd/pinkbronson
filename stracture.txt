@@ -1,0 +1,274 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║   PINK BRONSON 1.0  —  システム仕様書                               ║
+║   最終更新: 2026-03-12  (リファクタリング反映済み)                   ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ 概要
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Twitch配信者向けのプロデューサーデスクシステム。
+メインハブ (pink_bronson.py) が STT と子プロセス管理を担い、
+3つのサブツールを子プロセスとして起動する。
+
+  pink_bronson.py              … メインハブ (STT + 子プロセス起動)
+  └── Blue_Rayban/             … 翻訳エンジン + Firebase中継
+  └── Emerald_Rolex/           … Twitchチャット取得 + Firebase
+  └── Golden_Chain/            … 会話要約 + タイトル/ファシリテーター生成
+
+外部サービス: Twitch IRC, Twitch API (Helix), Gemini AI, Firebase Realtime DB,
+              VOICEVOX (ローカル), seya-chat-trans.web.app (Firebaseホスティング)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ ファイル構成 (現在)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Pink Bronson1.0/
+├── pink_bronson.py          # メインハブ。STT(faster-whisper)、子プロセス管理、
+│                            # 設定UI (SettingsWindow)、stt_bridge.json 書き込み
+│                            # Blue_RAY-BANのpythonパスはconfig.json python_paths.blue_rayban から取得
+├── config.json              # 全ツール共通設定
+│                            #   api_keys: twitch_token/channel/client_id/client_secret
+│                            #             gemini_key, firebase_url, firebase_api_key
+│                            #   firebase_auth: api_key/email/password
+│                            #   emerald_rolex: voicevox_enabled/url/speaker/volume/notify_*
+│                            #   python_paths: blue_rayban (起動用Pythonパス)
+│                            #   cross_tool: golden_chain_firebase, obs_ws_enabled
+│                            #   web_config: tts_audio_enabled/tts_voice/tts_language
+│                            #               tts_style_prompt/translation_target
+│                            #               ui_primary_color/ui_theme
+├── firebase_auth.py         # FirebaseAuth クラス (Email/Password認証、IDトークン自動更新)
+├── system_logger.py         # send_system_log() — 全ツールから Firebase /system_logs へ送信
+├── monitor.html             # システム監視ページ (ブラウザで開く)
+├── bronson_icon.png         # アイコン
+├── data/
+│   ├── stream_YYYYMM_HHMM.json   # STTセッションログ
+│   ├── stt_bridge.json           # pink_bronson → Blue_Rayban の発話受け渡し
+│   ├── stt_bridge_result.json    # Blue_Rayban → pink_bronson の翻訳結果返信
+│   ├── temp_audio/               # STT用一時音声ファイル
+│   └── archive/
+│       ├── YYYYMM_HHMM_stt.txt   # STTアーカイブ (テキスト)
+│       └── YYYYMM_HHMM_chat.jsonl# チャットアーカイブ (Emerald_Rolex)
+│
+├── Blue_Rayban/
+│   ├── main_ui.py           # コントロールパネルUI (tkinter)
+│   │                        #   ボタン: START / STOP / MOBILE / CONFIG
+│   │                        #   CONFIGパネル: web_config を Firebase に PUSH
+│   │                        #   STT最新発話パネル (JA/EN 表示)
+│   ├── mainTST.py           # メインロジック (子プロセスとして起動)
+│   │   ├── Bot (twitchio)   … Twitch IRC接続、受信ログのみ (翻訳・push はEmerald_Rolexが担当)
+│   │   │   └── send_to_twitch() … mobile.html 投稿をTwitchに転送するために使用
+│   │   ├── STTWatcher       … data/stt_bridge.json 監視 (1秒ポーリング)
+│   │   │                      → 発話検知 → 英訳 → Firebase /stt_en, /stt_history
+│   │   │                      → Web TTS (Gemini TTS → Firebase /config/tts_audio)
+│   │   ├── GoldenChainWatcher… Golden_Chain/output/*.txt 監視 (5秒ポーリング)
+│   │   │                      → Firebase /golden_chain/{summary|title|facilitator}
+│   │   └── ViewerQueueWatcher… Firebase /viewer_queue 監視 (3秒ポーリング)
+│   │                          → 翻訳 → Firebase /chats + Twitchチャットへ転送
+│   ├── twitchtoken.txt      # mainTST.py 優先設定ファイル (load_dotenv)
+│   │                        #   未設定の場合は config.json の値にフォールバック
+│   │                        #   TWITCH_ACCESS_TOKEN, TWITCH_CHANNEL,
+│   │                        #   FIREBASE_DATABASE_URL, AI_API_KEY,
+│   │                        #   FIREBASE_API_KEY, FIREBASE_AUTH_EMAIL,
+│   │                        #   FIREBASE_AUTH_PASSWORD
+│   └── mobile.html          # スマホ用ページ (Firebase /chats, /golden_chain 表示)
+│                            # MOBILEボタンで webbrowser.open
+│
+├── Emerald_Rolex/
+│   ├── main_ui.py           # コントロールパネルUI (tkinter)
+│   │                        #   ボタン: START / STOP / VOICEVOX(トグル)
+│   │                        #   チャット表示パネル (最新6件, JA翻訳付き)
+│   ├── emerald_rolex.py     # メインロジック (子プロセスとして起動)
+│   │   └── EmeraldRolexService
+│   │       ├── IRC接続      … ssl://irc.chat.twitch.tv:6697
+│   │       │                   justinfan匿名接続 (PASS schmoopiie, 実トークン不送信)
+│   │       ├── WS Server    … ws://localhost:8765
+│   │       │                   cross_tool.obs_ws_enabled=false の場合は起動しない
+│   │       │                   (現在OBS用HTMLは削除済みのため無効化中)
+│   │       ├── Firebase     … /chats.json へ POST (チャット配信の主要パス)
+│   │       ├── VOICEVOX TTS … キュー(maxsize=3)で順次再生
+│   │       ├── TwitchCache  … アバターCDN URLキャッシュ (ローカル画像保存なし)
+│   │       └── JSONL Archive… data/archive/YYYYMM_HHMM_chat.jsonl
+│   └── views/emerald_rolex/
+│       ├── style.css        # (OBS HTML再作成時の参照用に残存)
+│       ├── script.js        # (同上)
+│       ├── ws_token.json    # WebSocketトークン (起動時に自動生成)
+│       └── cache/
+│           └── avatar_urls.json  # アバターURL永続キャッシュ
+│
+└── Golden_Chain/
+    └── pinkblonsonbeta/
+        ├── venv/            # 専用Python仮想環境
+        ├── src/
+        │   ├── main_ui.py   # コントロールパネルUI (tkinter)
+        │   ├── summarizer.py# Gemini で STTテキストを3行要約 → output/summary.txt
+        │   ├── title_gen.py # Gemini でタイトル生成 → output/title.txt
+        │   ├── facilitator.py# Gemini でファシリテーター提案 → output/facilitator.txt
+        │   └── cleaner.py   # cleantext.json の管理
+        ├── data/
+        │   ├── cleantext.json    # STT入力テキスト
+        │   └── process_status.json
+        ├── output/
+        │   ├── summary.txt       # GoldenChainWatcherが監視
+        │   ├── title.txt         # GoldenChainWatcherが監視
+        │   ├── facilitator.txt   # GoldenChainWatcherが監視
+        │   └── obs_*.html        # OBS用HTML群 (使用状況未確認、削除検討)
+        ├── assets/
+        ├── requirements.txt
+        └── setup_beta.bat / run_beta.bat
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ データフロー
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[マイク音声]
+  → pink_bronson.py (faster-whisper STT)
+  → data/stt_bridge.json
+  → STTWatcher (Blue_Rayban/mainTST.py)
+  → [英訳] → Firebase /stt_en, /stt_history
+  → [Web TTS] → Firebase /config/tts_audio → seya-chat-trans.web.app で再生
+
+[Twitch IRC]
+  → Emerald_Rolex (emerald_rolex.py) ← チャット処理の唯一の担当
+  → [翻訳(JA/EN)] → Firebase /chats.json
+  → Blue_Rayban/mainTST.py (twitchio Bot) ← 受信ログのみ (翻訳・push なし)
+
+[mobile.html ビューア投稿]
+  → Firebase /viewer_queue/{key}
+  → ViewerQueueWatcher (Blue_Rayban/mainTST.py)
+  → Firebase /chats + Twitchチャットへ転送
+
+[Golden_Chain 出力]
+  → output/summary.txt, title.txt, facilitator.txt
+  → GoldenChainWatcher (Blue_Rayban/mainTST.py)
+  → Firebase /golden_chain/{summary|title|facilitator}
+  → seya-chat-trans.web.app で表示
+
+[各モジュール]
+  → system_logger.send_system_log()
+  → Firebase /system_logs
+  → monitor.html で確認可能
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ 子プロセス起動パス (pink_bronson.py)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Blue_RAY-BAN:
+  python: config.json の python_paths.blue_rayban
+          (未設定 or 存在しない場合: sys.executable にフォールバック)
+  script: Blue_Rayban/main_ui.py
+
+Emerald_Rolex:
+  python: sys.executable
+  script: Emerald_Rolex/main_ui.py
+
+Golden_Chain:
+  python: Golden_Chain/pinkblonsonbeta/venv/Scripts/python.exe
+  script: Golden_Chain/pinkblonsonbeta/src/main_ui.py
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ ポート / エンドポイント一覧
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ws://localhost:8765     Emerald_Rolex WebSocketサーバー
+                        cross_tool.obs_ws_enabled=false の場合は起動しない (現在無効)
+http://localhost:50021  VOICEVOX エンジン (外部アプリ、別途起動が必要)
+
+Firebase Realtime DB エンドポイント:
+  /chats.json                Twitchチャット (Emerald_Rolex が書き込み)
+  /viewer_queue/{key}        mobile.html からの投稿キュー
+  /stt_en.json               最新STT英訳 (最新1件)
+  /stt_history.json          STT履歴 (POST追記)
+  /golden_chain/summary      Golden_Chain 要約
+  /golden_chain/title        Golden_Chain タイトル
+  /golden_chain/facilitator  Golden_Chain ファシリテーター提案
+  /config/tts_audio.json     Web TTS 音声データ (base64 WAV)
+  /config/web_app.json       Webビューア設定 (Blue_RaybanのCONFIGパネルからPUSH)
+  /system_logs.json          システムログ (全モジュール)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ 認証情報の所在
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+config.json (全ツール共通 / Blue_Raybanのフォールバック)
+  api_keys.twitch_token         → Emerald_Rolex + mainTST.py (フォールバック)
+  api_keys.twitch_channel       → Emerald_Rolex + mainTST.py (フォールバック)
+  api_keys.twitch_client_id     → Emerald_Rolex
+  api_keys.twitch_client_secret → Emerald_Rolex
+  api_keys.gemini_key           → Emerald_Rolex + mainTST.py (フォールバック)
+  api_keys.firebase_url         → 全ツール (フォールバック)
+  api_keys.firebase_api_key     → mainTST.py (フォールバック)
+  firebase_auth.email/password  → mainTST.py (フォールバック)
+  python_paths.blue_rayban      → pink_bronson.py が参照
+
+Blue_Rayban/twitchtoken.txt (mainTST.py 優先設定, load_dotenv)
+  設定されている場合はこちらが優先。未設定の場合は config.json にフォールバック。
+  TWITCH_ACCESS_TOKEN, TWITCH_CHANNEL, FIREBASE_DATABASE_URL,
+  AI_API_KEY, FIREBASE_API_KEY, FIREBASE_AUTH_EMAIL, FIREBASE_AUTH_PASSWORD
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ 変更履歴
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[2026-03-12] リファクタリング
+
+  削除したファイル (OBS表示系HTML):
+    Blue_Rayban/index.html, index_mini.html, settings.html, settings_mini.html
+    Emerald_Rolex/settings.html
+    Emerald_Rolex/views/emerald_rolex/index.html, settings.html, preview.html
+
+  削除したボタン:
+    Blue_Rayban/main_ui.py — SETTINGS ボタン + open_settings()
+    Emerald_Rolex/main_ui.py — SETTINGS ボタン + open_settings()
+
+  mainTST.py の変更:
+    - RolexBridgeServer クラス・start_rolex_bridge() 関数を削除
+      (受信するが何も返さない完全なデッドコードだったため)
+    - Bot.event_message の翻訳・data構築処理を削除
+      (Emerald_Rolexに委任済みで結果未使用、Geminiコストのみ消費していた)
+    - 連鎖デッドコードを削除:
+        transform_japanese(), get_user_info(), initialize_twitch_badges()
+        icon_cache, badge_url_cache, ICON_CACHE_MAX
+    - 全 env 変数に config.json フォールバックを追加
+      (twitchtoken.txt 未設定でも config.json だけで動作可能に)
+    - langdetect DetectorFactory.seed = 0 追加 (検知結果を確定的に)
+    - http.server import を削除 (RolexBridge削除に伴い不要)
+
+  emerald_rolex.py の変更:
+    - IRC接続のPASSを実トークンからダミー(schmoopiie)に変更
+      (justinfan匿名接続に実トークン不要、漏洩リスク排除)
+    - TwitchCache からローカル画像ダウンロード処理を削除
+        _download(), _load_global_badges(), get_badge_local() を削除
+        _badge_cache dict を削除
+        アバターはCDN URLキャッシュのみ (OBS HTML削除でローカルパス参照なし)
+    - WS サーバーに cross_tool.obs_ws_enabled フラグ制御を追加
+      (現在 false = 停止。OBS HTML再作成時に true にする)
+    - langdetect DetectorFactory.seed = 0 追加
+    - hashlib import を削除 (ダウンロード廃止に伴い不要)
+
+  config.json の変更:
+    - python_paths.blue_rayban を追加
+      (pink_bronson.py のハードコードパスをここで管理)
+    - cross_tool セクションを追加
+        golden_chain_firebase: true
+        obs_ws_enabled: false
+
+  pink_bronson.py の変更:
+    - Blue_RAY-BAN の python_exe をハードコードから
+      config.json python_paths.blue_rayban の読み込みに変更
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ 依存ライブラリ (主要)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+pink_bronson.py:
+  faster-whisper, sounddevice, numpy, filelock, Pillow (オプション)
+
+Blue_Rayban/mainTST.py:
+  twitchio, google-generativeai, langdetect, requests, python-dotenv
+
+Emerald_Rolex/emerald_rolex.py:
+  websockets, requests, google-generativeai, langdetect,
+  pywin32 (win32console/win32gui), winsound
+
+Golden_Chain (venv内):
+  google-generativeai, requests (requirements.txt参照)

@@ -1,12 +1,23 @@
+import sys
 import time
 import os
 import traceback
 import google.generativeai as genai
+import sys
 from utils import load_config, log_error, get_recent_text, update_process_status, log_token_usage, sanitize_for_prompt, sanitize_gemini_output
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
+
+# D2: system_logger をトップレベルで一度だけ import
+_PINK_ROOT = os.path.dirname(os.path.dirname(PROJECT_ROOT))
+if _PINK_ROOT not in sys.path:
+    sys.path.insert(0, _PINK_ROOT)
+try:
+    from system_logger import send_system_log as _send_log
+except Exception:
+    def _send_log(module, message, **_): pass
 
 INPUT_FILE = os.path.join(PROJECT_ROOT, "data", "cleantext.json")
 OUTPUT_FILE = os.path.join(PROJECT_ROOT, "output", "facilitator.txt")
@@ -55,12 +66,14 @@ def generate_facilitator_content(text, model, prompt_template):
                 response.usage_metadata.candidates_token_count
             )
 
-        return sanitize_gemini_output(response.text.strip(), max_len=200)
+        return sanitize_gemini_output(response.text.strip(), max_len=500)
     except Exception as e:
         log_error(LOG_FILE, f"API Error: {e}\n{traceback.format_exc()}")
+        _send_log("GC Facilitator", f"司会進行生成エラー: {e}")
         raise e
 
 def main():
+    _send_log("GC Facilitator", "司会進行生成プロセスを開始しました。")
     print("Starting facilitator.py...")
     
     # Initial config load
@@ -82,7 +95,7 @@ def main():
             config = load_config(PROJECT_ROOT)
             interval = int(config.get('facilitator_interval', 30))
             lookback = int(config.get('facilitator_lookback', 180))
-            prompt_template = config.get('facilitator_prompt', '次の話題を提案してください。')
+            prompt_template = sanitize_for_prompt(config.get('facilitator_prompt', '次の話題を提案してください。'), max_len=200)
             
             update_process_status('facilitator', 'Fetching')
             text = get_recent_text(INPUT_FILE, lookback)
@@ -96,8 +109,10 @@ def main():
             update_process_status('facilitator', 'Returned')
             if facilitation:
                 # Save output
-                with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+                with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
                     f.write(facilitation)
+                print("==================================================")
+                _send_log("GC Facilitator", f"司会進行生成成功: {facilitation[:30]}...")
                 
                 print(f"Generated Facilitation: {facilitation}")
             

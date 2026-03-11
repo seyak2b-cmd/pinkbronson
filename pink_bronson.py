@@ -5,7 +5,7 @@
 ╚══════════════════════════════════════════════════════════╝
 """
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
+from tkinter import ttk, scrolledtext, messagebox, filedialog
 import os, json, threading, time, subprocess, queue, sys, wave
 from datetime import datetime
 from filelock import FileLock, Timeout
@@ -199,10 +199,22 @@ class AudioProcessor:
             print("🚀 Whisper モデルを CPU モードで読み込みます...")
             self.model = WhisperModel("base", device="cpu", compute_type="int8")
             print("✨ Whisper モデル読み込み完了！")
+            try:
+                _root = os.path.dirname(os.path.abspath(__file__))
+                if _root not in sys.path: sys.path.insert(0, _root)
+                from system_logger import send_system_log
+                send_system_log("Pink Bronson STT", "Whisperモデル(base/cpu)のロードが完了しました。")
+            except Exception: pass
             return True
         except Exception as e:
             print(f"AI モデルエラー: {e}")
             self.ui.after(0, lambda: self.ui.update_status("Model Error", "red"))
+            try:
+                _root = os.path.dirname(os.path.abspath(__file__))
+                if _root not in sys.path: sys.path.insert(0, _root)
+                from system_logger import send_system_log
+                send_system_log("Pink Bronson STT", f"Whisperモデルロードエラー: {e}")
+            except Exception: pass
             return False
 
     def start(self, device_id: str | None = None,
@@ -282,6 +294,12 @@ class AudioProcessor:
         except Exception as e:
             self.ui.after(0, lambda: self.ui.update_status("Mic Error", "red"))
             self.is_running = False
+            try:
+                _root = os.path.dirname(os.path.abspath(__file__))
+                if _root not in sys.path: sys.path.insert(0, _root)
+                from system_logger import send_system_log
+                send_system_log("Pink Bronson STT", f"マイク入力エラー: {e}")
+            except Exception: pass
 
     def _transcribe(self, raw: bytes, mic_rate: int):
         self.ui.after(0, lambda: self.ui.update_status("⚙️ 文字起こし中", "yellow"))
@@ -317,8 +335,21 @@ class AudioProcessor:
                 mb = get_session_size_mb()
                 if mb > BLOAT_WARN_MB:
                     self.ui.after(0, lambda m=mb: self.ui.show_bloat_warning(m))
+                
+                try:
+                    _root = os.path.dirname(os.path.abspath(__file__))
+                    if _root not in sys.path: sys.path.insert(0, _root)
+                    from system_logger import send_system_log
+                    send_system_log("Pink Bronson STT", f"文字起こし成功[Whisper]: {text[:30]}...")
+                except Exception: pass
         except Exception as e:
             print(f"文字起こしエラー: {e}")
+            try:
+                _root = os.path.dirname(os.path.abspath(__file__))
+                if _root not in sys.path: sys.path.insert(0, _root)
+                from system_logger import send_system_log
+                send_system_log("Pink Bronson STT", f"Whisperエラー: {e}")
+            except Exception: pass
         finally:
             self.ui.after(0, lambda: self.ui.update_status("Running (待機中)", "lightgreen"))
 
@@ -343,9 +374,22 @@ class AudioProcessor:
                 mb = get_session_size_mb()
                 if mb > BLOAT_WARN_MB:
                     self.ui.after(0, lambda m=mb: self.ui.show_bloat_warning(m))
+                
+                try:
+                    _root = os.path.dirname(os.path.abspath(__file__))
+                    if _root not in sys.path: sys.path.insert(0, _root)
+                    from system_logger import send_system_log
+                    send_system_log("Pink Bronson STT", f"文字起こし成功[Gemini]: {text[:30]}...")
+                except Exception: pass
         except Exception as e:
             print(f"Gemini STT エラー: {e}")
             self.ui.after(0, lambda: self.ui.update_status("[Gemini] エラー", "red"))
+            try:
+                _root = os.path.dirname(os.path.abspath(__file__))
+                if _root not in sys.path: sys.path.insert(0, _root)
+                from system_logger import send_system_log
+                send_system_log("Pink Bronson STT", f"Gemini API STTエラー: {e}")
+            except Exception: pass
         finally:
             try:
                 os.remove(tmp_path)
@@ -410,7 +454,7 @@ class SettingsWindow(tk.Toplevel):
         self.on_save = on_save_callback
         
         self.title("PRODUCER SETTINGS")
-        self.geometry("420x660")
+        self.geometry("420x820")
         self.resizable(False, False)
         _bg  = "#1a1b26"   # Tokyo Night bg
         _pan = "#24283b"   # panel
@@ -467,6 +511,64 @@ class SettingsWindow(tk.Toplevel):
         self.ent_fire = _entry(show="*")
         self.ent_fire.insert(0, keys.get("firebase_url", ""))
 
+        # Notification Sound
+        er_cfg = self.config.get("emerald_rolex", {})
+
+        _section("NOTIFICATION SOUND", _cyan)
+        notify_frame = tk.Frame(self, bg=_bg)
+        notify_frame.pack(fill=tk.X, padx=22, pady=(0, 4))
+        self._notify_enabled = tk.BooleanVar(value=er_cfg.get("notify_enabled", True))
+        tk.Checkbutton(notify_frame, text="Enable notification sound",
+                       variable=self._notify_enabled,
+                       bg=_bg, fg=_txt, selectcolor=_inp, activebackground=_bg,
+                       activeforeground=_txt, font=("Helvetica", 9)).pack(anchor="w")
+
+        sound_row = tk.Frame(self, bg=_bg)
+        sound_row.pack(fill=tk.X, padx=22, pady=(0, 2))
+        self.ent_sound = tk.Entry(sound_row, font=entry_font, bg=_inp, fg=_txt,
+                                  insertbackground=_cyan, relief="flat", bd=4)
+        self.ent_sound.insert(0, er_cfg.get("notify_sound", ""))
+        self.ent_sound.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        def _browse_sound():
+            path = filedialog.askopenfilename(
+                title="Select audio file",
+                filetypes=[("WAV files", "*.wav"), ("All files", "*.*")])
+            if path:
+                self.ent_sound.delete(0, tk.END)
+                self.ent_sound.insert(0, path)
+
+        tk.Button(sound_row, text="Browse", command=_browse_sound,
+                  bg=_pan, fg=_txt, font=("Helvetica", 9), relief="flat",
+                  cursor="hand2", padx=6).pack(side=tk.LEFT, padx=(4, 0))
+
+        vol_frame = tk.Frame(self, bg=_bg)
+        vol_frame.pack(fill=tk.X, padx=22, pady=(2, 0))
+        tk.Label(vol_frame, text="Volume:", bg=_bg, fg=_txt,
+                 font=("Helvetica", 9)).pack(side=tk.LEFT)
+        self._notify_vol = tk.DoubleVar(value=er_cfg.get("notify_volume", 1.0))
+        tk.Scale(vol_frame, variable=self._notify_vol, from_=0.0, to=2.0,
+                 resolution=0.1, orient=tk.HORIZONTAL, bg=_bg, fg=_txt,
+                 troughcolor=_inp, highlightthickness=0,
+                 activebackground=_cyan).pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        def _test_sound():
+            import winsound, threading
+            path = self.ent_sound.get().strip()
+            def _play():
+                try:
+                    if path and os.path.exists(path):
+                        winsound.PlaySound(path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                    else:
+                        winsound.MessageBeep(winsound.MB_OK)
+                except Exception as e:
+                    print(f"[test sound] {e}")
+            threading.Thread(target=_play, daemon=True).start()
+
+        tk.Button(self, text="▶ Test Sound", command=_test_sound,
+                  bg=_pan, fg=_cyan, font=("Helvetica", 9), relief="flat",
+                  cursor="hand2").pack(pady=(4, 0), anchor="w", padx=22)
+
         # SAVE
         btn_save = tk.Button(
             self, text="SAVE & APPLY", command=self.save_cfg,
@@ -485,6 +587,10 @@ class SettingsWindow(tk.Toplevel):
             "gemini_key":           self.ent_gemini.get().strip(),
             "firebase_url":         self.ent_fire.get().strip()
         }
+        er = self.config.setdefault("emerald_rolex", {})
+        er["notify_enabled"] = self._notify_enabled.get()
+        er["notify_sound"]   = self.ent_sound.get().strip()
+        er["notify_volume"]  = round(self._notify_vol.get(), 1)
         save_config(self.config)
         self.on_save()
         self.destroy()
@@ -536,6 +642,7 @@ class PinkBronsonUI(tk.Tk):
             self.combo_mic.current(0)
             
         self._meter.start(self.combo_mic.get())
+        self._poll_stt_result()
 
     def _build(self):
         # ══ Tokyo Night Header ══════════════════════════════════
@@ -715,35 +822,17 @@ class PinkBronsonUI(tk.Tk):
         self.widgets["fr_rayban"] = (fr_rayban, "bg_panel")
         
         self.btn_rayban = tk.Button(fr_rayban, text="Launch Blue_RAY-BAN (Translator)", command=lambda: self.toggle_proc("Blue_RAY-BAN", "blue_rayban.py"), font=("Helvetica", 10, "bold"), relief="flat", cursor="hand2")
-        self.btn_rayban.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=3)
+        self.btn_rayban.pack(fill=tk.X, expand=True, ipady=3)
         self.widgets["btn_rayban"] = (self.btn_rayban, "bg_panel", "cyan", "btn_act")
-
-        self.btn_rayban_set = tk.Button(fr_rayban, text="⚙️ Setting", command=self._open_rayban_settings, font=("Helvetica", 9, "bold"), relief="flat", cursor="hand2")
-        self.btn_rayban_set.pack(side=tk.RIGHT, padx=(5,0), ipady=3)
-        self.widgets["btn_rayban_set"] = (self.btn_rayban_set, "btn_bg", "cyan", "btn_act")
 
         # 3. Emerald_Rolex (Twitchチャット表示)
         fr_rolex = tk.Frame(self.fr_child, bg=self.theme.get("bg_panel", "#1A1A1A"))
         fr_rolex.pack(fill=tk.X, padx=10, pady=(4, 8))
         self.widgets["fr_rolex"] = (fr_rolex, "bg_panel")
-        
+
         self.btn_rolex = tk.Button(fr_rolex, text="Launch Emerald_Rolex (Chat viewer)", command=lambda: self.toggle_proc("Emerald_Rolex", "emerald_rolex.py"), font=("Helvetica", 10, "bold"), relief="flat", cursor="hand2")
-        self.btn_rolex.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=3)
+        self.btn_rolex.pack(fill=tk.X, expand=True, ipady=3)
         self.widgets["btn_rolex"] = (self.btn_rolex, "bg_panel", "emerald", "btn_act")
-
-        self.btn_rolex_set = tk.Button(fr_rolex, text="⚙️ Setting", command=self._open_rolex_settings, font=("Helvetica", 9, "bold"), relief="flat", cursor="hand2")
-        self.btn_rolex_set.pack(side=tk.RIGHT, padx=(5,0), ipady=3)
-        self.widgets["btn_rolex_set"] = (self.btn_rolex_set, "btn_bg", "emerald", "btn_act")
-
-    def _open_rayban_settings(self):
-        import webbrowser
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Blue_Rayban", "settings.html")
-        webbrowser.open(f"file:///{path.replace(os.sep, '/')}")
-
-    def _open_rolex_settings(self):
-        import webbrowser
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Emerald_Rolex", "settings.html")
-        webbrowser.open(f"file:///{path.replace(os.sep, '/')}")
 
     def apply_theme(self):
         """Applies colors to all registered widgets based on current self.theme"""
@@ -829,6 +918,12 @@ class PinkBronsonUI(tk.Tk):
             else:
                 proc.terminate()
             self._procs[name] = None
+            try:
+                _root = os.path.dirname(os.path.abspath(__file__))
+                if _root not in sys.path: sys.path.insert(0, _root)
+                from system_logger import send_system_log
+                send_system_log("Pink Bronson Main", f"子プロセス終了: {name}")
+            except Exception: pass
             btn.config(text=f"Launch {full_name}", bg=self.theme["bg_panel"], fg=self.theme[color_fg])
         else:
             # 停止中 → 起動
@@ -840,7 +935,8 @@ class PinkBronsonUI(tk.Tk):
                     main_script = os.path.join(app_dir, "src", "main_ui.py")
                 elif name == "Blue_RAY-BAN":
                     app_dir = os.path.join(base, "Blue_Rayban")
-                    python_exe = r"C:\Users\seyak\AppData\Local\Python\bin\python.exe"
+                    _cfg_paths = load_config().get("python_paths", {})
+                    python_exe = _cfg_paths.get("blue_rayban", sys.executable)
                     if not os.path.exists(python_exe):
                         python_exe = sys.executable  # フォールバック
                     main_script = os.path.join(app_dir, "main_ui.py")
@@ -881,11 +977,22 @@ class PinkBronsonUI(tk.Tk):
 
     def _read_child_output(self, name: str, proc: subprocess.Popen):
         try:
+            from system_logger import send_system_log as _slog
+        except Exception:
+            _slog = None
+        _LOG_PREFIXES = ('[STT', '[SYS]', '[GC]', 'ERROR', 'Error', 'Exception',
+                         'Traceback', 'WARNING', '[WARN', '起動', '終了', 'ONLINE', 'OFFLINE')
+        try:
             for line in iter(proc.stdout.readline, ""):
                 if not line: break
                 line = line.strip()
                 if not line: continue
                 self.after(0, lambda n=name, l=line: self._append_child_log(n, l))
+                if _slog and any(line.startswith(p) or p in line for p in _LOG_PREFIXES):
+                    try:
+                        _slog(name, line[:200])
+                    except Exception:
+                        pass
         except Exception:
             pass
         finally:
@@ -941,6 +1048,40 @@ class PinkBronsonUI(tk.Tk):
         self.txt_log.insert(tk.END, f"[{now}]{engine_tag} {text}\n")
         self.txt_log.see(tk.END)
         self.txt_log.configure(state="disabled")
+        # Blue_RAY-BAN ブリッジファイルへ書き込み
+        try:
+            bridge = os.path.join(DATA_DIR, "stt_bridge.json")
+            with open(bridge, "w", encoding="utf-8") as f:
+                json.dump({"text": text, "timestamp": str(time.time())}, f, ensure_ascii=False)
+        except Exception:
+            pass
+
+    def _poll_stt_result(self):
+        """Blue_RAY-BAN の翻訳結果ファイルを監視してログに追記する。"""
+        result_path = os.path.join(DATA_DIR, "stt_bridge_result.json")
+        last_mtime = [0.0]
+        def _check():
+            try:
+                if not os.path.exists(result_path):
+                    return
+                mtime = os.path.getmtime(result_path)
+                if mtime == last_mtime[0]:
+                    return
+                last_mtime[0] = mtime
+                with open(result_path, "r", encoding="utf-8") as f:
+                    d = json.load(f)
+                ja = d.get("text", "")
+                en = d.get("en", "")
+                if ja and en:
+                    now = datetime.now().strftime("%H:%M:%S")
+                    self.txt_log.configure(state="normal")
+                    self.txt_log.insert(tk.END, f"[{now}][BR] {ja}  →  {en}\n", "log_api")
+                    self.txt_log.see(tk.END)
+                    self.txt_log.configure(state="disabled")
+            except Exception:
+                pass
+            self.after(1500, _check)
+        self.after(1500, _check)
 
     def show_bloat_warning(self, mb: float):
         if not self._bloat_warned:
@@ -958,6 +1099,11 @@ class PinkBronsonUI(tk.Tk):
         self.destroy()
 
 if __name__ == "__main__":
+    try:
+        from system_logger import send_system_log
+        send_system_log("pink_bronson", "🚀 Pink Bronson 起動")
+    except Exception:
+        pass
     app = PinkBronsonUI(load_config())
     app.protocol("WM_DELETE_WINDOW", app.on_closing)
     app.mainloop()

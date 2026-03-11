@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PINK BRONSON – Master Monitor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:   #00ff41;
+      --green-d: #007a1e;
+      --green-m: #1a4d1a;
+      --bg:      #0a0a0a;
+      --bg2:     #0d0d0d;
+      --bg3:     #111;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--green);
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 13px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── ヘッダー ── */
+    #header {
+      background: #000;
+      border-bottom: 1px solid var(--green);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    #header h1 { font-size: 14px; letter-spacing: 3px; }
+    #header .meta { font-size: 11px; color: var(--green-d); }
+
+    #status-dot {
+      display: inline-block; width: 8px; height: 8px;
+      background: var(--green-d); border-radius: 50%;
+      margin-right: 6px; transition: background 0.3s;
+    }
+    #status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+    /* ── タブバー ── */
+    #tab-bar {
+      background: #000;
+      border-bottom: 1px solid var(--green-m);
+      display: flex;
+      flex-shrink: 0;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      border-right: 1px solid var(--green-m);
+      color: var(--green-d);
+      font-family: inherit;
+      font-size: 12px;
+      padding: 7px 18px;
+      cursor: pointer;
+      letter-spacing: 1px;
+      position: relative;
+      transition: all 0.15s;
+    }
+    .tab-btn:hover { color: var(--green); background: #0d1a0d; }
+    .tab-btn.active {
+      color: var(--green);
+      background: #0d1a0d;
+      border-bottom: 2px solid var(--green);
+    }
+    .tab-btn .badge {
+      display: inline-block;
+      background: var(--green-m);
+      color: var(--green);
+      font-size: 10px;
+      padding: 0 5px;
+      border-radius: 8px;
+      margin-left: 5px;
+      min-width: 18px;
+      text-align: center;
+    }
+
+    /* ── フィルターバー ── */
+    #filter-bar {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--green-m);
+      padding: 6px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    #filter-bar label { color: var(--green-d); font-size: 11px; }
+    #filter-input {
+      background: var(--bg3);
+      border: 1px solid var(--green-m);
+      color: var(--green);
+      font-family: inherit;
+      font-size: 12px;
+      padding: 3px 8px;
+      outline: none;
+      width: 200px;
+    }
+    #filter-input:focus { border-color: var(--green); }
+
+    .mod-btn {
+      background: transparent;
+      border: 1px solid var(--green-m);
+      color: var(--green-d);
+      font-family: inherit;
+      font-size: 11px;
+      padding: 2px 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .mod-btn:hover, .mod-btn.active {
+      background: #003300;
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    #clear-btn {
+      margin-left: auto;
+      background: transparent;
+      border: 1px solid #3d1a1a;
+      color: #7a0000;
+      font-family: inherit;
+      font-size: 11px;
+      padding: 2px 10px;
+      cursor: pointer;
+    }
+    #clear-btn:hover { border-color: #ff4141; color: #ff4141; }
+
+    #export-btn {
+      background: transparent;
+      border: 1px solid var(--green-m);
+      color: var(--green-d);
+      font-family: inherit;
+      font-size: 11px;
+      padding: 2px 10px;
+      cursor: pointer;
+    }
+    #export-btn:hover { border-color: var(--green); color: var(--green); }
+
+    /* ── ログコンテナ ── */
+    #log-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+    #log-container::-webkit-scrollbar { width: 6px; }
+    #log-container::-webkit-scrollbar-track { background: var(--bg); }
+    #log-container::-webkit-scrollbar-thumb { background: var(--green-m); border-radius: 3px; }
+
+    /* ── ログ行 共通 ── */
+    .log-entry {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      padding: 3px 16px;
+      border-bottom: 1px solid #0d1a0d;
+      animation: fadeIn 0.2s ease;
+    }
+    .log-entry:hover { background: #0d1a0d; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateX(-4px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .log-entry .ts  { color: #006010; font-size: 11px; flex-shrink: 0; width: 82px; }
+    .log-entry .mod { flex-shrink: 0; width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .log-entry .msg { color: #c8ffc8; word-break: break-all; flex: 1; }
+
+    /* chat タブ専用 */
+    .log-entry .user  { flex-shrink: 0; width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #41aaff; }
+    .log-entry .lang  { flex-shrink: 0; width: 36px; color: #888; font-size: 11px; }
+    .log-entry .tl    { color: #888; font-style: italic; word-break: break-all; flex: 1; font-size: 12px; }
+
+    /* stt タブ専用 */
+    .log-entry .stt-ja { color: #ffd700; word-break: break-all; flex: 1; }
+    .log-entry .stt-en { color: #888; word-break: break-all; flex: 1; font-size: 12px; font-style: italic; }
+
+    /* モジュール別カラー */
+    .m-pink_bronson { color: #ff69b4; }
+    .m-Blue_Rayban, .m-mainTST { color: #41aaff; }
+    .m-STTWatcher   { color: #ffd700; }
+    .m-RolexBridge  { color: #c084fc; }
+    .m-GoldenChain, .m-GC_Summarizer, .m-GC_Facilitator, .m-GC_TitleGen { color: #f97316; }
+    .m-ViewerQueue  { color: #34d399; }
+    .m-Emerald_Rolex{ color: #a78bfa; }
+    .m-SYSTEM       { color: #888; }
+    .m-default      { color: var(--green); }
+
+    /* ── STATUS タブ ── */
+    #status-panel {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .st-section-title {
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--green-d);
+      border-bottom: 1px solid var(--green-m);
+      padding-bottom: 4px;
+      margin-bottom: 8px;
+    }
+    .st-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .st-table th {
+      color: var(--green-d);
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-align: left;
+      padding: 3px 10px 3px 0;
+      border-bottom: 1px solid var(--green-m);
+    }
+    .st-table td {
+      padding: 5px 10px 5px 0;
+      border-bottom: 1px solid #0d1a0d;
+      vertical-align: middle;
+    }
+    .st-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green-d);
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .st-dot.ok   { background: var(--green); box-shadow: 0 0 4px var(--green); }
+    .st-dot.warn { background: #ffd700; box-shadow: 0 0 4px #ffd700; }
+    .st-dot.err  { background: #ff4444; box-shadow: 0 0 4px #ff4444; }
+    .st-val { color: var(--green); }
+    .st-dim { color: var(--green-d); font-size: 11px; }
+    .st-bar-wrap {
+      background: var(--green-m);
+      border-radius: 2px;
+      height: 6px;
+      width: 120px;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .st-bar-fill {
+      height: 100%;
+      background: var(--green);
+      border-radius: 2px;
+      transition: width 0.4s;
+    }
+    .st-conn-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+
+    /* chat行の品質インジケーター */
+    .chat-quality {
+      flex-shrink: 0;
+      font-size: 10px;
+      display: flex;
+      gap: 3px;
+    }
+    .cq { border-radius: 2px; padding: 1px 4px; }
+    .cq-ok  { background: #003300; color: var(--green); }
+    .cq-ng  { background: #1a0000; color: #664444; }
+
+    /* ── empty ── */
+    #empty-msg {
+      text-align: center; color: var(--green-m);
+      padding: 60px 0; letter-spacing: 2px;
+    }
+
+    /* ── フッター ── */
+    #footer {
+      background: #000;
+      border-top: 1px solid var(--green-m);
+      padding: 4px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      font-size: 11px;
+      color: var(--green-d);
+    }
+    #auto-scroll-label { cursor: pointer; display: flex; align-items: center; gap: 6px; }
+    #auto-scroll-cb { accent-color: var(--green); }
+
+    /* ── ステータスバー ── */
+    #stats-bar {
+      background: #050505;
+      border-bottom: 1px solid #0d1a0d;
+      padding: 3px 16px;
+      display: flex;
+      gap: 20px;
+      flex-shrink: 0;
+      font-size: 11px;
+      color: #004d10;
+      overflow-x: auto;
+    }
+    .stat-item { white-space: nowrap; }
+    .stat-item span { color: var(--green-d); }
+  </style>
+</head>
+<body>
+
+<!-- ヘッダー -->
+<div id="header">
+  <h1><span id="status-dot"></span>PINK BRONSON &mdash; Master Monitor</h1>
+  <span class="meta" id="header-meta">CONNECTING…</span>
+</div>
+
+<!-- タブバー -->
+<div id="tab-bar">
+  <button class="tab-btn" data-tab="status">STATUS</button>
+  <button class="tab-btn active" data-tab="system">SYSTEM LOGS <span class="badge" id="badge-system">0</span></button>
+  <button class="tab-btn" data-tab="chat">CHAT <span class="badge" id="badge-chat">0</span></button>
+  <button class="tab-btn" data-tab="stt">STT <span class="badge" id="badge-stt">0</span></button>
+  <button class="tab-btn" data-tab="golden">GOLDEN CHAIN <span class="badge" id="badge-golden">0</span></button>
+</div>
+
+<!-- ステータスバー -->
+<div id="stats-bar">
+  <span class="stat-item">pink_bronson: <span id="cnt-pink">0</span></span>
+  <span class="stat-item">mainTST: <span id="cnt-main">0</span></span>
+  <span class="stat-item">STTWatcher: <span id="cnt-stt">0</span></span>
+  <span class="stat-item">RolexBridge: <span id="cnt-rolex">0</span></span>
+  <span class="stat-item">GoldenChain: <span id="cnt-gc">0</span></span>
+  <span class="stat-item">ViewerQueue: <span id="cnt-vq">0</span></span>
+  <span class="stat-item">Emerald_Rolex: <span id="cnt-er">0</span></span>
+</div>
+
+<!-- フィルターバー -->
+<div id="filter-bar">
+  <label>FILTER:</label>
+  <input id="filter-input" type="text" placeholder="キーワード検索…" autocomplete="off">
+  <span id="mod-filters" style="display:flex;gap:6px;flex-wrap:wrap;">
+    <label style="margin-left:8px">MODULE:</label>
+    <button class="mod-btn active" data-mod="ALL">ALL</button>
+    <button class="mod-btn" data-mod="pink">pink_bronson</button>
+    <button class="mod-btn" data-mod="Blue|blue|rayban|mainTST">Blue_RAY-BAN</button>
+    <button class="mod-btn" data-mod="STT">STT</button>
+    <button class="mod-btn" data-mod="Rolex|rolex">RolexBridge</button>
+    <button class="mod-btn" data-mod="Golden|GC ">Golden_Chain</button>
+    <button class="mod-btn" data-mod="Viewer">ViewerQueue</button>
+    <button class="mod-btn" data-mod="Emerald">Emerald_Rolex</button>
+  </span>
+  <button id="export-btn">EXPORT</button>
+  <button id="clear-btn">CLEAR VIEW</button>
+</div>
+
+<!-- ログ表示エリア -->
+<div id="log-container">
+  <div id="empty-msg">[ WAITING FOR LOGS… ]</div>
+</div>
+
+<!-- フッター -->
+<div id="footer">
+  <span id="log-count">0 entries</span>
+  <label id="auto-scroll-label">
+    <input type="checkbox" id="auto-scroll-cb" checked>
+    AUTO SCROLL
+  </label>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+/* ══════════════════════════════════════════════
+   Firebase 初期化
+══════════════════════════════════════════════ */
+// STATUS パネル HTML を先にDOMに追加（タブ切替前でも存在する）
+document.getElementById("log-container").insertAdjacentHTML("beforebegin", `
+<div id="status-panel" style="display:none;overflow-y:auto;flex:1;">
+  <div>
+    <div class="st-section-title">FIREBASE CONNECTION</div>
+    <div class="st-conn-row">
+      <span class="st-dot" id="st-fb-dot"></span>
+      <span id="st-fb-label" class="st-val">Connecting…</span>
+    </div>
+  </div>
+  <div>
+    <div class="st-section-title">DATA PATHS</div>
+    <table class="st-table">
+      <thead><tr>
+        <th>PATH</th><th>COUNT</th><th>LAST RECEIVED</th><th>RATE /min</th><th>STATUS</th>
+      </tr></thead>
+      <tbody id="st-paths-body"></tbody>
+    </table>
+  </div>
+  <div>
+    <div class="st-section-title">CHAT DATA QUALITY</div>
+    <table class="st-table">
+      <thead><tr><th>FIELD</th><th>PRESENT</th><th>MISSING</th><th>COVERAGE</th></tr></thead>
+      <tbody id="st-quality-body"></tbody>
+    </table>
+  </div>
+  <div>
+    <div class="st-section-title">RECENT CHAT ENTRIES (last 5)</div>
+    <table class="st-table" id="st-recent-table">
+      <thead><tr>
+        <th>TIME</th><th>USER</th><th>LANG</th><th>IMG</th><th>COLOR</th><th>BADGE</th><th>TRANS</th><th>TEXT</th>
+      </tr></thead>
+      <tbody id="st-recent-body"></tbody>
+    </table>
+  </div>
+</div>`);
+
+const firebaseConfig = {
+  apiKey:      "AIzaSyAjkMsdvypCH4BsoNcjSNp8GX6_bLbKsA8",
+  authDomain:  "seya-chat-trans.firebaseapp.com",
+  databaseURL: "https://seya-chat-trans-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:   "seya-chat-trans"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+/* ══════════════════════════════════════════════
+   状態
+══════════════════════════════════════════════ */
+let currentTab  = "system";
+let filterMod   = "ALL";
+let filterText  = "";
+
+// データストア
+const store = {
+  system: [],   // { key, timestamp, ts_iso, module, message }
+  chat:   [],
+  stt:    [],
+  golden: []
+};
+
+// system_logs のレンダリング済みキー管理（点滅防止）
+const renderedSystemKeys = new Set();
+
+const counts = {
+  pink_bronson: 0, mainTST: 0, STTWatcher: 0, RolexBridge: 0,
+  GoldenChain:  0, ViewerQueue: 0, Emerald_Rolex: 0
+};
+
+/* ══════════════════════════════════════════════
+   DOM refs
+══════════════════════════════════════════════ */
+const container    = document.getElementById("log-container");
+const emptyMsg     = document.getElementById("empty-msg");
+const logCountEl   = document.getElementById("log-count");
+const headerMeta   = document.getElementById("header-meta");
+const statusDot    = document.getElementById("status-dot");
+const autoScrollCb = document.getElementById("auto-scroll-cb");
+const filterInput  = document.getElementById("filter-input");
+const modFilters   = document.getElementById("mod-filters");
+
+/* ══════════════════════════════════════════════
+   パス別 最終受信時刻 & レート追跡
+══════════════════════════════════════════════ */
+const pathMeta = {
+  system_logs:  { lastRx: null, recentTs: [] },
+  chats:        { lastRx: null, recentTs: [] },
+  stt_en:       { lastRx: null, recentTs: [] },
+  golden_chain: { lastRx: null, recentTs: [] },
+};
+
+function touchPath(name) {
+  const now = Date.now();
+  pathMeta[name].lastRx = now;
+  pathMeta[name].recentTs.push(now);
+  // 直近1分だけ保持
+  const cutoff = now - 60000;
+  pathMeta[name].recentTs = pathMeta[name].recentTs.filter(t => t > cutoff);
+}
+
+// Firebase 接続監視
+db.ref(".info/connected").on("value", snap => {
+  const ok = snap.val() === true;
+  const dot   = document.getElementById("st-fb-dot");
+  const label = document.getElementById("st-fb-label");
+  if (dot)   { dot.className   = "st-dot " + (ok ? "ok" : "err"); }
+  if (label) { label.textContent = ok ? "CONNECTED" : "DISCONNECTED"; }
+});
+
+/* ══════════════════════════════════════════════
+   Firebase 購読
+══════════════════════════════════════════════ */
+
+// ① system_logs – child_added で追記専用（点滅なし）
+db.ref("/system_logs").orderByChild("timestamp").limitToLast(500)
+  .on("child_added", snap => {
+    const e = { key: snap.key, ...snap.val() };
+    if (store.system.find(x => x.key === e.key)) return; // 重複スキップ
+    store.system.push(e);
+    touchPath("system_logs");
+    addModCount(e.module || "");
+    updateModCounts();
+    document.getElementById("badge-system").textContent = store.system.length;
+    emptyMsg.style.display = "none";
+
+    if (currentTab === "system" && passesSystemFilter(e)) {
+      if (!renderedSystemKeys.has(e.key)) {
+        renderedSystemKeys.add(e.key);
+        container.appendChild(buildSystemRow(e));
+        logCountEl.textContent = `${renderedSystemKeys.size} / ${store.system.length} entries`;
+        if (autoScrollCb.checked) container.scrollTop = container.scrollHeight;
+      }
+    }
+    updateStatus(true);
+  }, () => updateStatus(false));
+
+// ② chats – child_added
+db.ref("/chats").orderByChild("timestamp").limitToLast(200)
+  .on("child_added", snap => {
+    const e = { key: snap.key, ...snap.val() };
+    if (store.chat.find(x => x.key === e.key)) return;
+    store.chat.push(e);
+    touchPath("chats");
+    document.getElementById("badge-chat").textContent = store.chat.length;
+    if (currentTab === "chat") {
+      emptyMsg.style.display = "none";
+      container.appendChild(buildChatRow(e));
+      logCountEl.textContent = `${store.chat.length} entries`;
+      if (autoScrollCb.checked) container.scrollTop = container.scrollHeight;
+    }
+  });
+
+// ③ stt_en – child_added
+db.ref("/stt_en").limitToLast(100)
+  .on("child_added", snap => {
+    const e = { key: snap.key, ...snap.val() };
+    if (store.stt.find(x => x.key === e.key)) return;
+    store.stt.push(e);
+    touchPath("stt_en");
+    document.getElementById("badge-stt").textContent = store.stt.length;
+    if (currentTab === "stt") {
+      emptyMsg.style.display = "none";
+      container.appendChild(buildSttRow(e));
+      logCountEl.textContent = `${store.stt.length} entries`;
+      if (autoScrollCb.checked) container.scrollTop = container.scrollHeight;
+    }
+  });
+
+// ④ golden_chain – on("value") のまま（更新頻度低い）
+db.ref("/golden_chain")
+  .on("value", snap => {
+    touchPath("golden_chain");
+    store.golden = [];
+    snap.forEach(typeSnap => {
+      const val = typeSnap.val();
+      if (val && val.text) store.golden.push({ key: typeSnap.key, type: typeSnap.key, ...val });
+    });
+    store.golden.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    document.getElementById("badge-golden").textContent = store.golden.length;
+    if (currentTab === "golden") renderGoldenFull();
+  });
+
+/* ══════════════════════════════════════════════
+   フィルター条件
+══════════════════════════════════════════════ */
+function passesSystemFilter(e) {
+  const modRe = filterMod !== "ALL" ? new RegExp(filterMod, "i") : null;
+  if (modRe && !modRe.test(e.module || "")) return false;
+  if (filterText && !(
+    (e.message || "").toLowerCase().includes(filterText) ||
+    (e.module  || "").toLowerCase().includes(filterText)
+  )) return false;
+  return true;
+}
+
+/* ══════════════════════════════════════════════
+   タブ切替時の全描画
+══════════════════════════════════════════════ */
+function renderCurrent() {
+  if (currentTab === "status") { renderStatus(); return; }
+  container.querySelectorAll(".log-entry").forEach(el => el.remove());
+  renderedSystemKeys.clear();
+
+  let count = 0;
+  if (currentTab === "system") {
+    const frag = document.createDocumentFragment();
+    store.system.filter(passesSystemFilter).forEach(e => {
+      renderedSystemKeys.add(e.key);
+      frag.appendChild(buildSystemRow(e));
+      count++;
+    });
+    container.appendChild(frag);
+    logCountEl.textContent = `${count} / ${store.system.length} entries`;
+  } else if (currentTab === "chat") {
+    store.chat.forEach(e => { container.appendChild(buildChatRow(e)); count++; });
+    logCountEl.textContent = `${count} entries`;
+  } else if (currentTab === "stt") {
+    store.stt.forEach(e => { container.appendChild(buildSttRow(e)); count++; });
+    logCountEl.textContent = `${count} entries`;
+  } else {
+    renderGoldenFull(); return;
+  }
+
+  emptyMsg.style.display = count === 0 ? "block" : "none";
+  if (autoScrollCb.checked) container.scrollTop = container.scrollHeight;
+}
+
+/* ── system_logs 行ビルダー ── */
+function buildSystemRow(e) {
+  const row = makeRow();
+  row.innerHTML =
+    `<span class="ts">${esc(fmtTime(e.timestamp, e.ts_iso))}</span>` +
+    `<span class="mod ${getModClass(e.module || "")}">[${esc(e.module || "?")}]</span>` +
+    `<span class="msg">${esc(e.message || "")}</span>`;
+  return row;
+}
+
+/* ── chat 行ビルダー ── */
+function buildChatRow(e) {
+  const row = makeRow();
+  const tl     = e.translated_text || e.translated_en || "";
+  const hasImg = !!(e.profile_image_url);
+  const hasCol = !!(e.color);
+  const hasTl  = !!(tl);
+  row.innerHTML =
+    `<span class="ts">${esc(fmtTime(e.timestamp))}</span>` +
+    `<span class="user">${esc(e.display_name || e.user || "?")}</span>` +
+    `<span class="lang">[${esc(e.lang || "?")}]</span>` +
+    `<span class="chat-quality">` +
+      `<span class="cq ${hasImg ? 'cq-ok':'cq-ng'}" title="profile_image_url">${hasImg ? 'IMG':'img'}</span>` +
+      `<span class="cq ${hasCol ? 'cq-ok':'cq-ng'}" title="color">${hasCol ? 'COL':'col'}</span>` +
+      `<span class="cq ${hasTl  ? 'cq-ok':'cq-ng'}" title="translated">${hasTl  ? 'TL' :'tl' }</span>` +
+    `</span>` +
+    `<span class="msg">${esc(e.text || "")}</span>` +
+    (tl ? `<span class="tl">→ ${esc(tl)}</span>` : "");
+  return row;
+}
+
+/* ── STATUS パネル更新 ── */
+function renderStatus() {
+  const paths = [
+    { key: "system_logs",  label: "/system_logs",  count: () => store.system.length },
+    { key: "chats",        label: "/chats",         count: () => store.chat.length   },
+    { key: "stt_en",       label: "/stt_en",        count: () => store.stt.length    },
+    { key: "golden_chain", label: "/golden_chain",  count: () => store.golden.length },
+  ];
+
+  const tbody = document.getElementById("st-paths-body");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  const now = Date.now();
+  paths.forEach(p => {
+    const meta    = pathMeta[p.key];
+    const lastRx  = meta.lastRx;
+    const rate    = meta.recentTs.length;  // 直近1分間の件数
+    const agoSec  = lastRx ? Math.floor((now - lastRx) / 1000) : null;
+    const status  = agoSec === null ? "WAITING" : agoSec < 30 ? "ACTIVE" : agoSec < 120 ? "IDLE" : "STALE";
+    const dotCls  = agoSec === null ? "" : agoSec < 30 ? "ok" : agoSec < 120 ? "warn" : "err";
+    const agoStr  = agoSec === null ? "—" : agoSec < 60 ? agoSec + "s ago" : Math.floor(agoSec/60) + "m ago";
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      `<td class="st-val">${p.label}</td>` +
+      `<td class="st-val">${p.count()}</td>` +
+      `<td class="st-dim">${agoStr}</td>` +
+      `<td class="st-dim">${rate}/min</td>` +
+      `<td><span class="st-dot ${dotCls}"></span><span class="${dotCls === 'ok' ? 'st-val' : 'st-dim'}">${status}</span></td>`;
+    tbody.appendChild(tr);
+  });
+
+  // CHAT DATA QUALITY
+  const qbody = document.getElementById("st-quality-body");
+  if (qbody) {
+    const total = store.chat.length;
+    const fields = [
+      { label: "profile_image_url", ok: store.chat.filter(e => e.profile_image_url).length },
+      { label: "color",             ok: store.chat.filter(e => e.color).length },
+      { label: "translated_en",     ok: store.chat.filter(e => e.translated_en).length },
+      { label: "ja (translation)",  ok: store.chat.filter(e => e.ja).length },
+      { label: "lang",              ok: store.chat.filter(e => e.lang).length },
+      { label: "badge_type",        ok: store.chat.filter(e => e.badge_type && e.badge_type !== "none").length },
+    ];
+    qbody.innerHTML = "";
+    fields.forEach(f => {
+      const pct  = total > 0 ? Math.round(f.ok / total * 100) : 0;
+      const cls  = pct >= 80 ? "ok" : pct >= 40 ? "warn" : "err";
+      const tr   = document.createElement("tr");
+      tr.innerHTML =
+        `<td class="st-dim">${f.label}</td>` +
+        `<td class="st-val">${f.ok}</td>` +
+        `<td class="st-dim">${total - f.ok}</td>` +
+        `<td><span class="st-dot ${cls}"></span>` +
+        `<span class="st-bar-wrap"><span class="st-bar-fill" style="width:${pct}%"></span></span> ` +
+        `<span class="${cls === 'ok' ? 'st-val' : 'st-dim'}">${pct}%</span></td>`;
+      qbody.appendChild(tr);
+    });
+  }
+
+  // RECENT CHAT (last 5)
+  const rbody = document.getElementById("st-recent-body");
+  if (rbody) {
+    rbody.innerHTML = "";
+    const recent = store.chat.slice(-5).reverse();
+    recent.forEach(e => {
+      const tr = document.createElement("tr");
+      const ok  = v => `<span class="st-dot ok" style="width:6px;height:6px"></span>`;
+      const ng  = v => `<span class="st-dot err" style="width:6px;height:6px"></span>`;
+      tr.innerHTML =
+        `<td class="st-dim">${fmtTime(e.timestamp)}</td>` +
+        `<td class="st-val" style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.display_name||"?")}</td>` +
+        `<td class="st-dim">${esc(e.lang||"?")}</td>` +
+        `<td>${e.profile_image_url ? ok() : ng()}</td>` +
+        `<td>${e.color            ? ok() : ng()}</td>` +
+        `<td>${(e.badge_type && e.badge_type!=="none") ? ok() : ng()}</td>` +
+        `<td>${e.translated_en    ? ok() : ng()}</td>` +
+        `<td class="st-dim" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.text||"")}</td>`;
+      rbody.appendChild(tr);
+    });
+  }
+}
+
+// STATUS を5秒ごと自動更新
+setInterval(() => { if (currentTab === "status") renderStatus(); }, 5000);
+
+/* ── STT 行ビルダー ── */
+function buildSttRow(e) {
+  const row = makeRow();
+  const jaText = e.original || e.text || "";
+  const enText = e.text !== jaText ? e.text : (e.en || "");
+  row.innerHTML =
+    `<span class="ts">${esc(fmtTime(e.timestamp))}</span>` +
+    `<span class="mod m-STTWatcher">[STT]</span>` +
+    `<span class="stt-ja">${esc(jaText)}</span>` +
+    (enText ? `<span class="stt-en">→ ${esc(enText)}</span>` : "");
+  return row;
+}
+
+/* ── Golden Chain 全描画 ── */
+function renderGoldenFull() {
+  container.querySelectorAll(".log-entry").forEach(el => el.remove());
+  const typeColor = { summary: "#f97316", title: "#fbbf24", facilitator: "#34d399" };
+  const frag = document.createDocumentFragment();
+  store.golden.forEach(e => {
+    const row = makeRow();
+    const col = typeColor[e.type] || "#f97316";
+    row.innerHTML =
+      `<span class="ts">${esc(fmtTime(e.timestamp))}</span>` +
+      `<span class="mod" style="color:${col}">[${esc(e.type || "?")}]</span>` +
+      `<span class="msg" style="white-space:pre-wrap">${esc(e.text || "")}</span>`;
+    frag.appendChild(row);
+  });
+  container.appendChild(frag);
+  emptyMsg.style.display = store.golden.length === 0 ? "block" : "none";
+  logCountEl.textContent = `${store.golden.length} entries`;
+  if (autoScrollCb.checked) container.scrollTop = container.scrollHeight;
+}
+
+/* ── addModCount ── */
+function addModCount(m) {
+  if (/pink|bronson/i.test(m) && !/STT/i.test(m)) counts.pink_bronson++;
+  else if (/blue|rayban|mainTST/i.test(m)) counts.mainTST++;
+  else if (/STT/i.test(m)) counts.STTWatcher++;
+  else if (/rolex|bridge/i.test(m) && !/emerald/i.test(m)) counts.RolexBridge++;
+  else if (/GC|golden/i.test(m)) counts.GoldenChain++;
+  else if (/viewer/i.test(m)) counts.ViewerQueue++;
+  else if (/emerald/i.test(m)) counts.Emerald_Rolex++;
+}
+
+
+/* ══════════════════════════════════════════════
+   ユーティリティ
+══════════════════════════════════════════════ */
+function makeRow() {
+  const d = document.createElement("div");
+  d.className = "log-entry";
+  return d;
+}
+
+function getModClass(mod) {
+  const m = mod.toLowerCase();
+  if (m.includes("emerald")) return "m-Emerald_Rolex";
+  if (m.includes("pink") || m.includes("bronson")) return "m-pink_bronson";
+  if (m.includes("blue") || m.includes("rayban") || m.includes("maintst")) return "m-Blue_Rayban";
+  if (m.includes("stt")) return "m-STTWatcher";
+  if (m.includes("rolex") || m.includes("bridge")) return "m-RolexBridge";
+  if (m.includes("gc") || m.includes("golden")) return "m-GoldenChain";
+  if (m.includes("viewer")) return "m-ViewerQueue";
+  if (m === "system") return "m-SYSTEM";
+  return "m-default";
+}
+
+function fmtTime(ms, iso) {
+  if (iso) return iso.slice(11, 19);
+  if (!ms)  return "--:--:--";
+  return new Date(ms).toTimeString().slice(0, 8);
+}
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function updateStatus(ok) {
+  statusDot.className = ok ? "live" : "";
+  headerMeta.textContent = ok ? "LIVE  ·  system/chat/stt/golden" : "CONNECTION ERROR";
+}
+
+function updateModCounts() {
+  document.getElementById("cnt-pink").textContent  = counts.pink_bronson;
+  document.getElementById("cnt-main").textContent  = counts.mainTST;
+  document.getElementById("cnt-stt").textContent   = counts.STTWatcher;
+  document.getElementById("cnt-rolex").textContent = counts.RolexBridge;
+  document.getElementById("cnt-gc").textContent    = counts.GoldenChain;
+  document.getElementById("cnt-vq").textContent    = counts.ViewerQueue;
+  document.getElementById("cnt-er").textContent    = counts.Emerald_Rolex;
+}
+
+/* ══════════════════════════════════════════════
+   イベント
+══════════════════════════════════════════════ */
+// タブ切り替え
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentTab = btn.dataset.tab;
+
+    const statusPanel  = document.getElementById("status-panel");
+    const logContainer = document.getElementById("log-container");
+    const filterBar    = document.getElementById("filter-bar");
+
+    if (currentTab === "status") {
+      statusPanel.style.display  = "flex";
+      logContainer.style.display = "none";
+      filterBar.style.display    = "none";
+      renderStatus();
+    } else {
+      statusPanel.style.display  = "none";
+      logContainer.style.display = "block";
+      filterBar.style.display    = "flex";
+      // system タブのみモジュールフィルター表示
+      modFilters.style.display = (currentTab === "system") ? "flex" : "none";
+      renderCurrent();
+    }
+  });
+});
+
+// モジュールフィルター
+document.querySelectorAll(".mod-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".mod-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    filterMod = btn.dataset.mod;
+    renderCurrent();
+  });
+});
+
+// テキストフィルター
+filterInput.addEventListener("input", e => {
+  filterText = e.target.value.trim().toLowerCase();
+  renderCurrent();
+});
+
+// CLEAR VIEW
+document.getElementById("clear-btn").addEventListener("click", () => {
+  container.querySelectorAll(".log-entry").forEach(el => el.remove());
+  emptyMsg.style.display = "block";
+  logCountEl.textContent = "0 entries (view cleared)";
+});
+
+// EXPORT CSV
+document.getElementById("export-btn").addEventListener("click", () => {
+  let rows = [["timestamp", "module", "message"]];
+  if (currentTab === "system") {
+    store.system.forEach(e => rows.push([
+      e.ts_iso || fmtTime(e.timestamp), e.module || "", e.message || ""
+    ]));
+  } else if (currentTab === "chat") {
+    rows = [["timestamp", "user", "lang", "text", "translated"]];
+    store.chat.forEach(e => rows.push([
+      fmtTime(e.timestamp), e.display_name || "", e.lang || "", e.text || "",
+      e.translated_text || e.translated_en || ""
+    ]));
+  } else if (currentTab === "stt") {
+    rows = [["timestamp", "text_ja", "text_en"]];
+    store.stt.forEach(e => rows.push([
+      fmtTime(e.timestamp), e.original || e.text || "", e.en || e.text || ""
+    ]));
+  } else {
+    rows = [["timestamp", "type", "text"]];
+    store.golden.forEach(e => rows.push([
+      fmtTime(e.timestamp), e.type || "", e.text || ""
+    ]));
+  }
+
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `pink_bronson_${currentTab}_${Date.now()}.csv`;
+  a.click();
+});
+</script>
+</body>
+</html>

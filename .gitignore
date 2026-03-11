@@ -17,8 +17,12 @@ Golden_Chain/pinkblonsonbeta/logs/
 Emerald_Rolex/views/emerald_rolex/cache/
 Emerald_Rolex/views/emerald_rolex/ws_token.json
 voicevox/
-my-hosting-page/firebase-debug.log
+my-hosting-page/
 firebase-debug.log
 .firebaserc
+
+# ツール・IDE
+.claude/
+
 # ロックファイル
 *.lock

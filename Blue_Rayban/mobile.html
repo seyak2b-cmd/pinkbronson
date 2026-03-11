@@ -9,9 +9,6 @@
         PixelMplus フォント使用
         作者: itouhiro 氏 (https://itouhiro.github.io/PixelMplus/)
         ライセンス: M+ FONTS LICENSE (改変・再配布自由)
-        フォントファイルを assets/fonts/ に配置してください:
-          assets/fonts/PixelMplus10-Regular.ttf
-          assets/fonts/PixelMplus10-Bold.ttf
     -->
     <style>
         @font-face {
@@ -31,13 +28,15 @@
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
     <style>
         /* ══════════════════════════════════════════════════
-           90s Industrial LCD — Mobile Edition
-           Pink Bronson 1.0 | Blue_Rayban mobile.html
+           Pink Bronson 1.0 | mobile.html
+           Dynamic theme via /config/web_app
         ══════════════════════════════════════════════════ */
         :root {
+            /* Dark theme defaults — /config/web_app で上書きされる */
             --bg:        #1C1C1C;
             --panel:     #242424;
             --lcd-bg:    #141800;
@@ -62,9 +61,10 @@
             font-family: var(--font);
             min-height: 100vh;
             overflow-x: hidden;
+            transition: background 0.4s, color 0.4s;
         }
 
-        /* ── ヘッダー ── */
+        /* ── ヘッダー */
         .header {
             background: var(--panel);
             border-bottom: 2px solid var(--border);
@@ -89,27 +89,35 @@
             letter-spacing: 1px;
         }
 
-        .header-sub {
-            font-size: 0.65em;
-            color: var(--muted);
+        .header-sub { font-size: 0.65em; color: var(--muted); }
+
+        /* TTS 解除ボタン */
+        #tts-unlock-btn {
             margin-left: auto;
+            background: var(--btn-bg);
+            border: 1px solid var(--lcd-dim);
+            color: var(--muted);
+            font-family: var(--font);
+            font-size: 0.65em;
+            padding: 3px 8px;
+            cursor: pointer;
+            border-radius: 3px;
+            white-space: nowrap;
+            transition: color 0.3s, border-color 0.3s;
+        }
+        #tts-unlock-btn.active {
+            color: var(--led-on);
+            border-color: var(--led-on);
         }
 
-        /* ── Twitch 埋め込み ── */
-        .stream-wrapper {
-            width: 100%;
-            background: #000;
-            position: relative;
-        }
-
+        /* ── Twitch 埋め込み */
+        .stream-wrapper { width: 100%; background: #000; }
         .stream-wrapper iframe {
-            width: 100%;
-            aspect-ratio: 16 / 9;
-            border: none;
-            display: block;
+            width: 100%; aspect-ratio: 16/9;
+            border: none; display: block;
         }
 
-        /* ── ゴールデンチェーン パネル ── */
+        /* ── Golden Chain パネル */
         .gc-panel {
             background: var(--panel);
             border-bottom: 1px solid var(--border);
@@ -126,8 +134,8 @@
             border: 1px solid var(--lcd-dim);
             border-radius: 4px;
             padding: 6px 10px;
-            min-width: 180px;
-            max-width: 260px;
+            min-width: 180px; max-width: 260px;
+            transition: border-color 0.3s;
         }
 
         .gc-card-label {
@@ -145,7 +153,23 @@
             font-family: var(--font-sans);
         }
 
-        /* ── チャット セクション ── */
+        /* ── TTS 再生インジケータ */
+        #tts-indicator {
+            display: none;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            padding: 4px 12px;
+            font-size: 0.65em;
+            color: var(--led-on);
+            letter-spacing: 1px;
+            animation: blink 0.8s ease-in-out infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.3; }
+        }
+
+        /* ── チャット */
         .chat-section-header {
             background: var(--panel);
             border-bottom: 1px solid var(--border);
@@ -153,10 +177,18 @@
             font-size: 0.65em;
             color: var(--lcd-dim);
             letter-spacing: 2px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #lang-indicator {
+            margin-left: auto;
+            font-size: 0.9em;
+            color: var(--accent);
         }
 
         #chat-scroll {
-            height: calc(100vh - 0px);  /* JS で動的に設定 */
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             padding: 8px 10px;
@@ -165,7 +197,7 @@
             gap: 6px;
         }
 
-        /* ── チャットメッセージ ── */
+        /* ── チャットアイテム */
         .chat-item {
             background: var(--lcd-bg);
             border: 1px solid var(--lcd-dim);
@@ -202,26 +234,12 @@
             border: 1px solid var(--lcd-dim);
             background: var(--btn-bg);
             display: flex; align-items: center; justify-content: center;
-            font-size: 11px;
-            flex-shrink: 0;
+            font-size: 11px; flex-shrink: 0;
         }
 
-        .chat-badge {
-            width: 14px; height: 14px;
-            object-fit: contain; vertical-align: middle;
-        }
-
-        .chat-name {
-            font-weight: bold;
-            font-size: 0.75em;
-            color: var(--head);
-        }
-
-        .chat-time {
-            font-size: 0.6em;
-            color: var(--muted);
-            margin-left: auto;
-        }
+        .chat-badge { width: 14px; height: 14px; object-fit: contain; vertical-align: middle; }
+        .chat-name  { font-weight: bold; font-size: 0.75em; color: var(--head); }
+        .chat-time  { font-size: 0.6em; color: var(--muted); margin-left: auto; }
 
         .chat-lang-badge {
             font-size: 0.55em;
@@ -249,7 +267,7 @@
 
         .tl-icon { font-size: 0.8em; margin-right: 2px; }
 
-        /* ── 接続状態バー ── */
+        /* ── ステータスバー */
         .status-bar {
             position: fixed;
             bottom: 0; left: 0; right: 0;
@@ -271,8 +289,19 @@
             background: var(--led-on);
             margin-right: 4px;
         }
-
         .status-dot.error { background: var(--led-red); }
+
+        /* ── Light theme */
+        body.theme-light {
+            --bg:      #e9e9f4;
+            --panel:   #ffffff;
+            --lcd-bg:  #f0f0fa;
+            --lcd-dim: #9090b0;
+            --border:  #c8c8d8;
+            --btn-bg:  #d5d6e8;
+            --head:    #1a1b26;
+            --muted:   #787c99;
+        }
     </style>
 </head>
 <body>
@@ -282,219 +311,397 @@
     <div class="led" id="led"></div>
     <div class="header-title">BLUE_RAY-BAN  //  MOBILE VIEW</div>
     <div class="header-sub">seyak2b LIVE</div>
+    <button id="tts-unlock-btn" onclick="unlockTts()">🔇 TTS TAP TO ENABLE</button>
 </div>
 
-<!-- Twitch 配信埋め込み -->
+<!-- Twitch 埋め込み -->
 <div class="stream-wrapper">
     <iframe id="twitch-embed" allowfullscreen></iframe>
 </div>
 
 <!-- Golden Chain パネル -->
 <div class="gc-panel" id="gc-panel">
-    <div class="gc-card" id="gc-summary">
+    <div class="gc-card">
         <div class="gc-card-label">▸ SUMMARY</div>
         <div class="gc-card-text" id="gc-summary-text">接続待機中...</div>
     </div>
-    <div class="gc-card" id="gc-title">
+    <div class="gc-card">
         <div class="gc-card-label">▸ TITLE</div>
         <div class="gc-card-text" id="gc-title-text">—</div>
     </div>
-    <div class="gc-card" id="gc-facilitator">
+    <div class="gc-card">
         <div class="gc-card-label">▸ TOPIC</div>
         <div class="gc-card-text" id="gc-facilitator-text">—</div>
     </div>
 </div>
 
-<!-- チャットエリア -->
-<div class="chat-section-header">CHAT  //  REALTIME TRANSLATION FEED</div>
+<!-- TTS 再生インジケータ -->
+<div id="tts-indicator">♪ TTS PLAYING...</div>
+
+<!-- チャットヘッダー -->
+<div class="chat-section-header">
+    CHAT  //  REALTIME TRANSLATION FEED
+    <span id="lang-indicator">JA</span>
+</div>
+
 <div id="chat-scroll"></div>
 
 <!-- ステータスバー -->
 <div class="status-bar">
-    <span><span class="status-dot" id="fb-dot"></span> <span id="fb-status">Firebase 接続中...</span></span>
+    <span>
+        <span class="status-dot" id="fb-dot"></span>
+        <span id="fb-status">Firebase 接続中...</span>
+    </span>
+    <span id="tts-status" style="color: var(--muted)">TTS: —</span>
     <span id="msg-count">0 messages</span>
 </div>
 
 <script>
-    /* =====================================================
-       Pink Bronson 1.0 — mobile.html
-       Firebase Realtime Database → リアルタイムチャット表示
-       + Golden Chain サマリーパネル
-       + Twitch 配信埋め込み
-    ===================================================== */
+/* =====================================================
+   Pink Bronson 1.0 — mobile.html
+   /config/web_app  → テーマ・TTS・翻訳先 動的反映
+   /config/tts_audio → base64 WAV を Web Audio で再生
+   /chats           → リアルタイムチャット
+   /golden_chain/*  → GoldenChain パネル
+===================================================== */
 
-    // ── Twitch 埋め込み（hostname に応じて parent を自動設定）
-    (function() {
-        const ch = 'seyak2b';
-        const parent = location.hostname || 'localhost';
-        const src = `https://player.twitch.tv/?channel=${ch}&parent=${encodeURIComponent(parent)}&autoplay=true&muted=false`;
-        document.getElementById('twitch-embed').src = src;
-    })();
+// ── グローバル状態
+let webTtsEnabled      = true;
+let translationTarget  = 'ja';
+let ttsAudioEnabled    = false;
+let ttsUnlocked        = false;   // ユーザー操作で解除済みか
+let lastTtsTimestamp   = Date.now(); // ページ読込前の音声を無視
+let audioContext       = null;
 
-    // ── チャット欄の高さを動的に調整
-    function resizeChatArea() {
-        const header  = document.querySelector('.header').offsetHeight;
-        const stream  = document.querySelector('.stream-wrapper').offsetHeight;
-        const gcPanel = document.querySelector('.gc-panel').offsetHeight;
-        const chatHdr = document.querySelector('.chat-section-header').offsetHeight;
-        const statusBar = document.querySelector('.status-bar').offsetHeight;
-        const remaining = window.innerHeight - header - stream - gcPanel - chatHdr - statusBar - 8;
-        document.getElementById('chat-scroll').style.height = Math.max(120, remaining) + 'px';
+// ── Twitch 埋め込み
+(function() {
+    const ch     = 'seyak2b';
+    const parent = location.hostname || 'localhost';
+    document.getElementById('twitch-embed').src =
+        `https://player.twitch.tv/?channel=${ch}&parent=${encodeURIComponent(parent)}&autoplay=true&muted=false`;
+})();
+
+// ── チャット欄高さ調整
+function resizeChatArea() {
+    const els = ['.header', '.stream-wrapper', '.gc-panel',
+                 '#tts-indicator', '.chat-section-header', '.status-bar'];
+    let used = 0;
+    els.forEach(sel => {
+        const el = document.querySelector(sel);
+        if (el) used += el.offsetHeight;
+    });
+    const h = Math.max(120, window.innerHeight - used - 8);
+    document.getElementById('chat-scroll').style.height = h + 'px';
+}
+window.addEventListener('resize', resizeChatArea);
+setTimeout(resizeChatArea, 500);
+
+// ── Firebase 設定
+const firebaseConfig = {
+    apiKey:      "AIzaSyAjkMsdvypCH4BsoNcjSNp8GX6_bLbKsA8",
+    authDomain:  "seya-chat-trans.firebaseapp.com",
+    databaseURL: "https://seya-chat-trans-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId:   "seya-chat-trans"
+};
+
+let database;
+let _listenersInit = false;
+
+try {
+    firebase.initializeApp(firebaseConfig);
+    database = firebase.database();
+    console.log('✅ Firebase 初期化完了');
+} catch (e) {
+    document.getElementById('fb-dot').classList.add('error');
+    document.getElementById('fb-status').textContent = '接続失敗: ' + e.message;
+    console.error('Firebase 初期化失敗:', e);
+}
+
+// ── 匿名サインイン (視聴者は自動認証、操作不要)
+firebase.auth().onAuthStateChanged(user => {
+    if (user) {
+        initListeners();
     }
-    window.addEventListener('resize', resizeChatArea);
-    window.addEventListener('load', resizeChatArea);
-    setTimeout(resizeChatArea, 500); // iframe 読み込み後
+});
 
-    // ── Firebase 設定
-    const firebaseConfig = {
-        apiKey:      "AIzaSyAjkMsdvypCH4BsoNcjSNp8GX6_bLbKsA8",
-        authDomain:  "seya-chat-trans.firebaseapp.com",
-        databaseURL: "https://seya-chat-trans-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId:   "seya-chat-trans"
-    };
+firebase.auth().signInAnonymously()
+    .catch(e => console.warn('[Auth] 匿名サインイン失敗:', e));
 
-    let database;
+// ══════════════════════════════════════════════════════
+//  Web Config 適用 (/config/web_app)
+// ══════════════════════════════════════════════════════
+function applyWebConfig(cfg) {
+    if (!cfg) return;
+
+    // TTS 設定
+    webTtsEnabled   = cfg.tts_enabled     !== false;
+    ttsAudioEnabled = cfg.tts_audio_enabled === true;
+    document.getElementById('tts-status').textContent =
+        ttsAudioEnabled ? (webTtsEnabled ? 'TTS: ON' : 'TTS: OFF') : 'TTS: NO AUDIO';
+    document.getElementById('tts-status').style.color =
+        (ttsAudioEnabled && webTtsEnabled) ? 'var(--led-on)' : 'var(--muted)';
+
+    // 翻訳先言語
+    translationTarget = cfg.translation_target || 'ja';
+    const langLabels = { ja: 'JA', en: 'EN', ko: 'KO', zh: 'ZH' };
+    document.getElementById('lang-indicator').textContent =
+        langLabels[translationTarget] || translationTarget.toUpperCase();
+
+    // UI テーマ
+    if (cfg.ui_theme === 'light') {
+        document.body.classList.add('theme-light');
+    } else {
+        document.body.classList.remove('theme-light');
+    }
+
+    // UI カラー
+    if (cfg.ui_primary_color) {
+        const c = cfg.ui_primary_color;
+        document.documentElement.style.setProperty('--lcd-fg',  c);
+        document.documentElement.style.setProperty('--accent',  c);
+        // dim は primary を暗くした色 (alpha 50%)
+        document.documentElement.style.setProperty('--lcd-dim',
+            cfg.ui_theme === 'light' ? '#9090b0' : dimColor(c));
+    }
+
+    resizeChatArea();
+    console.log('[web_app] 設定反映:', cfg);
+}
+
+/** 16進カラーを約50%暗くして返す */
+function dimColor(hex) {
     try {
-        firebase.initializeApp(firebaseConfig);
-        database = firebase.database();
-        document.getElementById('fb-status').textContent = 'Firebase 接続完了';
-        document.getElementById('led').style.boxShadow = '0 0 6px #33CC00';
-        console.log('✅ Firebase 初期化完了');
+        const r = parseInt(hex.slice(1,3),16);
+        const g = parseInt(hex.slice(3,5),16);
+        const b = parseInt(hex.slice(5,7),16);
+        const dr = Math.floor(r * 0.45).toString(16).padStart(2,'0');
+        const dg = Math.floor(g * 0.45).toString(16).padStart(2,'0');
+        const db = Math.floor(b * 0.45).toString(16).padStart(2,'0');
+        return `#${dr}${dg}${db}`;
+    } catch { return '#485400'; }
+}
+
+// ══════════════════════════════════════════════════════
+//  TTS 音声再生 (/config/tts_audio)
+// ══════════════════════════════════════════════════════
+
+/** ユーザー操作で AudioContext を解除 */
+function unlockTts() {
+    if (ttsUnlocked) return;
+    try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // 無音バッファを再生してロックを解除
+        const buf = audioContext.createBuffer(1, 1, 22050);
+        const src = audioContext.createBufferSource();
+        src.buffer = buf;
+        src.connect(audioContext.destination);
+        src.start(0);
+        ttsUnlocked = true;
+        const btn = document.getElementById('tts-unlock-btn');
+        btn.textContent = '🔊 TTS ENABLED';
+        btn.classList.add('active');
+        console.log('[TTS] AudioContext 解除完了');
     } catch (e) {
-        document.getElementById('fb-dot').classList.add('error');
-        document.getElementById('fb-status').textContent = 'Firebase 接続失敗: ' + e.message;
-        console.error('Firebase 初期化失敗:', e);
+        console.warn('[TTS] AudioContext 解除失敗:', e);
     }
+}
 
-    // ── ページ読み込み時刻（過去チャット除外）
-    const pageLoadTime = Date.now();
-    const shownKeys    = new Set();
-    let msgCount       = 0;
-    const chatScroll   = document.getElementById('chat-scroll');
-
-    // ── 時刻フォーマット
-    function fmtTime(ts) {
-        const d = ts ? new Date(ts) : new Date();
-        return d.getHours().toString().padStart(2, '0') + ':' +
-               d.getMinutes().toString().padStart(2, '0');
+/** base64 WAV を Web Audio API で再生 */
+function playBase64Audio(b64, text) {
+    if (!ttsUnlocked || !audioContext) {
+        console.log('[TTS] 未解除のためスキップ (TAP TO ENABLE を押してください)');
+        return;
     }
+    try {
+        const binary = atob(b64);
+        const bytes  = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-    // ── テキストを安全にエスケープ
-    function esc(s) {
-        return String(s)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
+        const indic = document.getElementById('tts-indicator');
+        indic.style.display = 'block';
+        indic.textContent   = '♪ TTS: ' + (text || 'PLAYING...');
+        resizeChatArea();
+
+        audioContext.decodeAudioData(bytes.buffer, (decoded) => {
+            const src = audioContext.createBufferSource();
+            src.buffer = decoded;
+            src.connect(audioContext.destination);
+            src.start(0);
+            src.onended = () => {
+                indic.style.display = 'none';
+                resizeChatArea();
+            };
+            console.log('[TTS] ▶ 再生開始:', text);
+        }, (err) => {
+            indic.style.display = 'none';
+            resizeChatArea();
+            console.warn('[TTS] decode エラー:', err);
+        });
+    } catch (e) {
+        document.getElementById('tts-indicator').style.display = 'none';
+        resizeChatArea();
+        console.error('[TTS] 再生失敗:', e);
     }
+}
 
-    // ── チャットメッセージを追加
-    function addChat(data, key) {
-        if (shownKeys.has(key)) return;
-        shownKeys.add(key);
-        if (shownKeys.size > 300) {
-            const arr = [...shownKeys];
-            shownKeys.clear();
-            arr.slice(-150).forEach(k => shownKeys.add(k));
-        }
+// ══════════════════════════════════════════════════════
+//  チャット表示
+// ══════════════════════════════════════════════════════
+const pageLoadTime = Date.now();
+const shownKeys    = new Set();
+let msgCount       = 0;
+const chatScroll   = document.getElementById('chat-scroll');
 
-        if (data.timestamp && data.timestamp < pageLoadTime) return;
+function fmtTime(ts) {
+    const d = ts ? new Date(ts) : new Date();
+    return d.getHours().toString().padStart(2,'0') + ':' +
+           d.getMinutes().toString().padStart(2,'0');
+}
 
-        const name    = esc(data.display_name || data.user || '名無し');
-        const origTxt = esc(data.text || '');
-        const transTxt = esc(data.translated_text || '');
+function esc(s) {
+    return String(s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function addChat(data, key) {
+    if (shownKeys.has(key)) return;
+    shownKeys.add(key);
+    if (shownKeys.size > 300) {
+        const arr = [...shownKeys];
+        shownKeys.clear();
+        arr.slice(-150).forEach(k => shownKeys.add(k));
+    }
+    if (data.timestamp && data.timestamp < pageLoadTime) return;
+
+    const name    = esc(data.display_name || data.user || '名無し');
+    const origTxt = esc(data.text || '');
+    const transTxt  = esc(data.translated_text || '');   // 日本語翻訳
+    const transEnTxt = esc(data.translated_en  || '');   // 英語翻訳
+    const imgUrl  = data.profile_image_url || '';
+    const badges  = data.badges || [];
+    const lang    = data.lang || '';
+    const source  = data.source || 'twitch';
+    const timeStr = fmtTime(data.timestamp);
+
+    // 翻訳先に応じてメインテキストと原文表示を切り替え
+    let mainTxt, origHtml;
+    if (translationTarget === 'en') {
+        mainTxt  = transEnTxt || origTxt;
+        origHtml = (transEnTxt && transEnTxt !== origTxt)
+            ? `<div class="chat-original"><span class="tl-icon">🇬🇧</span>${origTxt}</div>`
+            : '';
+    } else if (translationTarget === 'ja') {
         const isTranslated = data.is_translated && transTxt;
-        const mainTxt = isTranslated ? transTxt : origTxt;
-        const imgUrl  = data.profile_image_url || '';
-        const badges  = data.badges || [];
-        const lang    = data.lang || '';
-        const source  = data.source || 'twitch';
-        const timeStr = fmtTime(data.timestamp);
-
-        const iconHtml = imgUrl
-            ? `<img src="${imgUrl}" class="chat-avatar" onerror="this.outerHTML='<div class=\\'chat-avatar-ph\\'>👤</div>'">`
-            : `<div class="chat-avatar-ph">👤</div>`;
-
-        const badgesHtml = badges
-            .map(b => `<img src="${esc(b)}" class="chat-badge" alt="">`)
-            .join('');
-
-        const langBadge = lang
-            ? `<span class="chat-lang-badge">${esc(lang)}</span>`
-            : '';
-        const sourceBadge = source === 'rolex'
-            ? `<span class="chat-lang-badge" style="background:#2a3a00">📡</span>`
-            : '';
-
-        const origHtml = isTranslated
+        mainTxt  = isTranslated ? transTxt : origTxt;
+        origHtml = isTranslated
             ? `<div class="chat-original"><span class="tl-icon">🌐</span>${origTxt}</div>`
             : '';
-
-        const el = document.createElement('div');
-        el.className = 'chat-item';
-        el.innerHTML = `
-            <div class="chat-meta">
-                ${iconHtml}
-                ${badgesHtml}
-                <span class="chat-name">${name}</span>
-                ${langBadge}${sourceBadge}
-                <span class="chat-time">${timeStr}</span>
-            </div>
-            <div class="chat-main">${mainTxt}</div>
-            ${origHtml}
-        `;
-
-        chatScroll.appendChild(el);
-        el.addEventListener('animationend', () => {
-            el.style.animation = 'none';
-            el.style.opacity = '1';
-        }, { once: true });
-
-        // 最大 40 件表示
-        while (chatScroll.children.length > 40) {
-            chatScroll.removeChild(chatScroll.firstChild);
-        }
-
-        chatScroll.scrollTop = chatScroll.scrollHeight;
-        msgCount++;
-        document.getElementById('msg-count').textContent = msgCount + ' messages';
-        resizeChatArea();
+    } else {
+        // ko / zh など: 原文をそのまま表示
+        mainTxt  = origTxt;
+        origHtml = '';
     }
 
-    // ── Firebase チャット監視
-    if (database) {
-        database.ref('chats')
-            .limitToLast(30)
-            .on('child_added', (snapshot) => {
-                addChat(snapshot.val(), snapshot.key);
-            });
+    const iconHtml = imgUrl
+        ? `<img src="${imgUrl}" class="chat-avatar" onerror="this.outerHTML='<div class=\\'chat-avatar-ph\\'>👤</div>'">`
+        : `<div class="chat-avatar-ph">👤</div>`;
 
-        // ── Golden Chain パネル監視
-        function watchGC(key, elId) {
-            database.ref(`golden_chain/${key}`).on('value', (snap) => {
-                const data = snap.val();
-                if (data && data.text) {
-                    const el = document.getElementById(elId);
-                    if (el) {
-                        el.textContent = data.text;
-                        el.parentElement.style.borderColor = '#AABF00';
-                        setTimeout(() => {
-                            el.parentElement.style.borderColor = '#485400';
-                        }, 2000);
-                    }
+    const badgesHtml = badges
+        .map(b => `<img src="${esc(b)}" class="chat-badge" alt="">`)
+        .join('');
+
+    const langBadge   = lang   ? `<span class="chat-lang-badge">${esc(lang)}</span>` : '';
+    const sourceBadge = source === 'rolex'
+        ? `<span class="chat-lang-badge" style="background:#2a3a00">📡</span>` : '';
+    const mobileBadge = source === 'mobile_viewer'
+        ? `<span class="chat-lang-badge" style="background:#001a2a">📱</span>` : '';
+
+    const el = document.createElement('div');
+    el.className = 'chat-item';
+    el.innerHTML = `
+        <div class="chat-meta">
+            ${iconHtml}${badgesHtml}
+            <span class="chat-name">${name}</span>
+            ${langBadge}${sourceBadge}${mobileBadge}
+            <span class="chat-time">${timeStr}</span>
+        </div>
+        <div class="chat-main">${mainTxt}</div>
+        ${origHtml}
+    `;
+
+    chatScroll.appendChild(el);
+    el.addEventListener('animationend', () => {
+        el.style.animation = 'none';
+        el.style.opacity   = '1';
+    }, { once: true });
+
+    while (chatScroll.children.length > 40) {
+        chatScroll.removeChild(chatScroll.firstChild);
+    }
+    chatScroll.scrollTop = chatScroll.scrollHeight;
+    msgCount++;
+    document.getElementById('msg-count').textContent = msgCount + ' messages';
+    resizeChatArea();
+}
+
+// ══════════════════════════════════════════════════════
+//  Firebase リスナー群
+// ══════════════════════════════════════════════════════
+// ── Firebase リスナー群 (認証後に一度だけ呼ばれる)
+function initListeners() {
+    if (_listenersInit || !database) return;
+    _listenersInit = true;
+
+    // /config/web_app — 設定をリアルタイム反映
+    database.ref('config/web_app').on('value', (snap) => {
+        applyWebConfig(snap.val());
+    });
+
+    // /config/tts_audio — base64 WAV を受信して再生
+    database.ref('config/tts_audio').on('value', (snap) => {
+        const data = snap.val();
+        if (!data || !data.audio_b64) return;
+        if (!data.timestamp || data.timestamp <= lastTtsTimestamp) return;
+        if (!webTtsEnabled || !ttsAudioEnabled) return;
+        lastTtsTimestamp = data.timestamp;
+        playBase64Audio(data.audio_b64, data.text || '');
+    });
+
+    // /chats — リアルタイムチャット
+    database.ref('chats')
+        .limitToLast(30)
+        .on('child_added', (snapshot) => {
+            addChat(snapshot.val(), snapshot.key);
+        });
+
+    // /golden_chain — GoldenChain パネル
+    function watchGC(key, elId) {
+        database.ref(`golden_chain/${key}`).on('value', (snap) => {
+            const data = snap.val();
+            if (data && data.text) {
+                const el = document.getElementById(elId);
+                if (el) {
+                    el.textContent = data.text;
+                    el.parentElement.style.borderColor = 'var(--accent)';
+                    setTimeout(() => {
+                        el.parentElement.style.borderColor = 'var(--lcd-dim)';
+                    }, 2000);
                 }
-            });
-        }
-
-        watchGC('summary',     'gc-summary-text');
-        watchGC('title',       'gc-title-text');
-        watchGC('facilitator', 'gc-facilitator-text');
-
-        document.getElementById('fb-dot').style.background = '#33CC00';
-        document.getElementById('fb-status').textContent = 'LIVE';
+            }
+        });
     }
+    watchGC('summary',     'gc-summary-text');
+    watchGC('title',       'gc-title-text');
+    watchGC('facilitator', 'gc-facilitator-text');
 
-    console.log('✅ Pink Bronson Mobile View 準備完了');
+    document.getElementById('fb-dot').style.background = '#33CC00';
+    document.getElementById('fb-status').textContent   = 'LIVE';
+    document.getElementById('led').style.boxShadow     = '0 0 6px #33CC00';
+}
+
+window.addEventListener('load', resizeChatArea);
+console.log('✅ Pink Bronson Mobile View 準備完了');
 </script>
 </body>
 </html>

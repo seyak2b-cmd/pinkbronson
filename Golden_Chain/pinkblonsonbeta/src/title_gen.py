@@ -3,11 +3,21 @@ import os
 import random
 import traceback
 import google.generativeai as genai
+import sys
 from utils import load_config, log_error, get_recent_text, update_process_status, log_token_usage, sanitize_for_prompt, sanitize_gemini_output
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
+
+# D2: system_logger をトップレベルで一度だけ import
+_PINK_ROOT = os.path.dirname(os.path.dirname(PROJECT_ROOT))
+if _PINK_ROOT not in sys.path:
+    sys.path.insert(0, _PINK_ROOT)
+try:
+    from system_logger import send_system_log as _send_log
+except Exception:
+    def _send_log(module, message, **_): pass
 
 INPUT_FILE = os.path.join(PROJECT_ROOT, "data", "cleantext.json")
 OUTPUT_FILE = os.path.join(PROJECT_ROOT, "output", "title.txt")
@@ -73,12 +83,14 @@ def generate_title(text, model, prompt_template, fake_news_prompt=None):
                 response.usage_metadata.candidates_token_count
             )
 
-        return sanitize_gemini_output(response.text.strip(), max_len=80)
+        return sanitize_gemini_output(response.text.strip(), max_len=100)
     except Exception as e:
         log_error(LOG_FILE, f"API Error: {e}\n{traceback.format_exc()}")
+        _send_log("GC Title", f"タイトル生成エラー: {e}")
         raise e
 
 def main():
+    _send_log("GC Title", "タイトル生成プロセスを開始しました。")
     print("Starting title_generator.py...")
     
     # Initial config load
@@ -102,14 +114,14 @@ def main():
             config = load_config(PROJECT_ROOT)
             interval = int(config.get('title_gen_interval', 60))
             lookback = int(config.get('title_gen_lookback', 60))
-            prompt_template = config.get('title_gen_prompt', 'タイトルを生成してください。')
+            prompt_template = sanitize_for_prompt(config.get('title_gen_prompt', 'タイトルを生成してください。'), max_len=200)
             default_fake_news = (
                 "発話がないため、架空の嘘ニュースを生成すること。\n"
                 "・誰も傷つけない、毒にも薬にもならない内容にする。\n"
                 "・動物や自然、日常の不思議をテーマに。\n"
                 "・【FAKE NEWS】を頭につけること。"
             )
-            fake_news_prompt = config.get('title_gen_fake_news_prompt', default_fake_news)
+            fake_news_prompt = sanitize_for_prompt(config.get('title_gen_fake_news_prompt', default_fake_news), max_len=300)
             
             update_process_status('title_gen', 'Fetching')
             text = get_recent_text(INPUT_FILE, lookback)
@@ -127,6 +139,8 @@ def main():
                 f.write(title)
             
             print(f"Generated: {title}")
+            print("==================================================")
+            _send_log("GC Title", f"タイトル生成成功: {title[:30]}...")
             consecutive_errors = 0
             
         except Exception:

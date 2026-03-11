@@ -1440,7 +1440,7 @@ class AquareadControlPanel:
 
             subprocess.Popen(
                 [python_exe, script_path],
-                creationflags=creation_flags
+                creation_flags=creation_flags
             )
         except Exception as e:
             print(f"Failed to run cleaner: {e}")
@@ -2099,4 +2099,11 @@ class AquareadControlPanel:
 if __name__ == "__main__":
     root = tk.Tk()
     app = AquareadControlPanel(root)
+    import sys, os
+    try:
+        _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        if _root not in sys.path: sys.path.insert(0, _root)
+        from system_logger import send_system_log
+        send_system_log("Golden Chain", "🟢 Golden Chain UI を起動しました。")
+    except Exception: pass
     root.mainloop()

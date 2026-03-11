@@ -1,3 +1,4 @@
+import sys
 import time
 import os
 import traceback
@@ -7,6 +8,15 @@ from utils import load_config, log_error, get_recent_text, update_process_status
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
+
+# D2: system_logger をトップレベルで一度だけ import
+_PINK_ROOT = os.path.dirname(os.path.dirname(PROJECT_ROOT))
+if _PINK_ROOT not in sys.path:
+    sys.path.insert(0, _PINK_ROOT)
+try:
+    from system_logger import send_system_log as _send_log
+except Exception:
+    def _send_log(module, message, **_): pass
 
 INPUT_FILE = os.path.join(PROJECT_ROOT, "data", "cleantext.json")
 OUTPUT_FILE = os.path.join(PROJECT_ROOT, "output", "summary.txt")
@@ -50,9 +60,12 @@ def generate_summary(text, model, prompt_template):
         return sanitize_gemini_output(response.text.strip(), max_len=500)
     except Exception as e:
         log_error(LOG_FILE, f"API Error: {e}\n{traceback.format_exc()}")
+        _send_log("GC Summarizer", f"要約生成エラー: {e}")
         raise e
 
 def main():
+    _send_log("GC Summarizer", "要約生成プロセスを開始しました。")
+    log_error(LOG_FILE, "Process Started")
     print("Starting summarizer.py...")
     
     # Initial config load
@@ -74,7 +87,7 @@ def main():
             config = load_config(PROJECT_ROOT)
             interval = int(config.get('summarizer_interval', 60))
             lookback = int(config.get('summarizer_lookback', 666))
-            prompt_template = config.get('summarizer_prompt', '会話を3行で要約してください。')
+            prompt_template = sanitize_for_prompt(config.get('summarizer_prompt', '会話を3行で要約してください。'), max_len=200)
             
             update_process_status('summarizer', 'Fetching')
             text = get_recent_text(INPUT_FILE, lookback)
@@ -89,6 +102,8 @@ def main():
             
             with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
                 f.write(summary)
+            print("==================================================")
+            _send_log("GC Summarizer", f"要約生成成功: {summary[:30]}...")
             
             print(f"Generated Summary:\n{summary}")
             

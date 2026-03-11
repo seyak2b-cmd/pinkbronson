@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PINK BRONSON – System Monitor</title>
+  <style>
+    /* ── リセット & ベース ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0a0a;
+      color: #00ff41;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 13px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── ヘッダー ── */
+    #header {
+      background: #000;
+      border-bottom: 1px solid #00ff41;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    #header h1 {
+      font-size: 14px;
+      letter-spacing: 3px;
+      color: #00ff41;
+      text-transform: uppercase;
+    }
+
+    #header .meta {
+      font-size: 11px;
+      color: #007a1e;
+    }
+
+    #status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: #007a1e;
+      border-radius: 50%;
+      margin-right: 6px;
+      transition: background 0.3s;
+    }
+
+    #status-dot.live { background: #00ff41; box-shadow: 0 0 6px #00ff41; }
+
+    /* ── フィルターバー ── */
+    #filter-bar {
+      background: #0d0d0d;
+      border-bottom: 1px solid #1a3d1a;
+      padding: 6px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    #filter-bar label { color: #007a1e; font-size: 11px; }
+
+    #filter-input {
+      background: #111;
+      border: 1px solid #1a4d1a;
+      color: #00ff41;
+      font-family: inherit;
+      font-size: 12px;
+      padding: 3px 8px;
+      outline: none;
+      width: 200px;
+    }
+
+    #filter-input:focus { border-color: #00ff41; }
+
+    .module-btn {
+      background: transparent;
+      border: 1px solid #1a4d1a;
+      color: #007a1e;
+      font-family: inherit;
+      font-size: 11px;
+      padding: 2px 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .module-btn:hover, .module-btn.active {
+      background: #003300;
+      border-color: #00ff41;
+      color: #00ff41;
+    }
+
+    #clear-btn {
+      margin-left: auto;
+      background: transparent;
+      border: 1px solid #3d1a1a;
+      color: #7a0000;
+      font-family: inherit;
+      font-size: 11px;
+      padding: 2px 10px;
+      cursor: pointer;
+    }
+
+    #clear-btn:hover { border-color: #ff4141; color: #ff4141; }
+
+    /* ── ログコンテナ ── */
+    #log-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+      scroll-behavior: smooth;
+    }
+
+    /* スクロールバー */
+    #log-container::-webkit-scrollbar { width: 6px; }
+    #log-container::-webkit-scrollbar-track { background: #0a0a0a; }
+    #log-container::-webkit-scrollbar-thumb { background: #1a4d1a; border-radius: 3px; }
+
+    /* ── ログ行 ── */
+    .log-entry {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      padding: 3px 16px;
+      border-bottom: 1px solid #0d1a0d;
+      animation: fadeIn 0.25s ease;
+      transition: background 0.15s;
+    }
+
+    .log-entry:hover { background: #0d1a0d; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateX(-6px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .log-entry .ts {
+      color: #006010;
+      font-size: 11px;
+      flex-shrink: 0;
+      width: 82px;
+    }
+
+    .log-entry .mod {
+      flex-shrink: 0;
+      width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .log-entry .msg {
+      color: #c8ffc8;
+      word-break: break-all;
+      flex: 1;
+    }
+
+    /* モジュール別カラー */
+    .mod-pink_bronson  { color: #ff69b4; }
+    .mod-mainTST       { color: #41aaff; }
+    .mod-STTWatcher    { color: #ffd700; }
+    .mod-RolexBridge   { color: #c084fc; }
+    .mod-GoldenChain   { color: #f97316; }
+    .mod-ViewerQueue   { color: #34d399; }
+    .mod-default       { color: #00ff41; }
+
+    /* ── フッター ── */
+    #footer {
+      background: #000;
+      border-top: 1px solid #1a3d1a;
+      padding: 4px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      font-size: 11px;
+      color: #007a1e;
+    }
+
+    #auto-scroll-label { cursor: pointer; display: flex; align-items: center; gap: 6px; }
+    #auto-scroll-cb { accent-color: #00ff41; }
+
+    /* ── 空状態 ── */
+    #empty-msg {
+      text-align: center;
+      color: #1a4d1a;
+      padding: 60px 0;
+      letter-spacing: 2px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ヘッダー -->
+<div id="header">
+  <h1>
+    <span id="status-dot"></span>
+    PINK BRONSON &mdash; System Monitor
+  </h1>
+  <span class="meta" id="header-meta">CONNECTING…</span>
+</div>
+
+<!-- フィルターバー -->
+<div id="filter-bar">
+  <label>FILTER:</label>
+  <input id="filter-input" type="text" placeholder="キーワード検索…" autocomplete="off">
+  <label>MODULE:</label>
+  <button class="module-btn active" data-mod="ALL">ALL</button>
+  <button class="module-btn" data-mod="pink_bronson">pink_bronson</button>
+  <button class="module-btn" data-mod="mainTST">mainTST</button>
+  <button class="module-btn" data-mod="STTWatcher">STTWatcher</button>
+  <button class="module-btn" data-mod="RolexBridge">RolexBridge</button>
+  <button class="module-btn" data-mod="GoldenChain">GoldenChain</button>
+  <button class="module-btn" data-mod="ViewerQueue">ViewerQueue</button>
+  <button id="clear-btn">CLEAR VIEW</button>
+</div>
+
+<!-- ログ表示エリア -->
+<div id="log-container">
+  <div id="empty-msg">[ WAITING FOR LOGS… ]</div>
+</div>
+
+<!-- フッター -->
+<div id="footer">
+  <span id="log-count">0 entries</span>
+  <label id="auto-scroll-label">
+    <input type="checkbox" id="auto-scroll-cb" checked>
+    AUTO SCROLL
+  </label>
+</div>
+
+<!-- Firebase SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+  /* ══════════════════════════════════════════════════
+     Firebase 設定  ※ index.html と同じプロジェクト
+     ══════════════════════════════════════════════════ */
+  const firebaseConfig = {
+    apiKey:      "AIzaSyAjkMsdvypCH4BsoNcjSNp8GX6_bLbKsA8",
+    authDomain:  "seya-chat-trans.firebaseapp.com",
+    databaseURL: "https://seya-chat-trans-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId:   "seya-chat-trans"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  /* ══════════════════════════════════════════════════
+     状態管理
+     ══════════════════════════════════════════════════ */
+  let entries     = [];       // { key, ts_iso, module, message, timestamp }
+  let filterMod   = "ALL";
+  let filterText  = "";
+  let totalCount  = 0;
+
+  const container    = document.getElementById("log-container");
+  const emptyMsg     = document.getElementById("empty-msg");
+  const logCountEl   = document.getElementById("log-count");
+  const headerMeta   = document.getElementById("header-meta");
+  const statusDot    = document.getElementById("status-dot");
+  const autoScrollCb = document.getElementById("auto-scroll-cb");
+
+  /* ══════════════════════════════════════════════════
+     Firebase リアルタイム監視  limitToLast(50)
+     ══════════════════════════════════════════════════ */
+  const logsRef = db.ref("/system_logs").orderByChild("timestamp").limitToLast(500);
+
+  logsRef.on("value", (snapshot) => {
+    entries = [];
+    snapshot.forEach((child) => {
+      entries.push({ key: child.key, ...child.val() });
+    });
+    // 新しい順に表示するため逆順にソート
+    entries.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    totalCount = entries.length;
+    renderLogs();
+    updateStatus(true);
+  }, (err) => {
+    updateStatus(false);
+    console.error("Firebase error:", err);
+  });
+
+  /* ══════════════════════════════════════════════════
+     描画
+     ══════════════════════════════════════════════════ */
+  function renderLogs() {
+    const filtered = entries.filter(e => {
+      if (filterMod !== "ALL" && e.module !== filterMod) return false;
+      if (filterText && !(
+        (e.message || "").toLowerCase().includes(filterText) ||
+        (e.module  || "").toLowerCase().includes(filterText)
+      )) return false;
+      return true;
+    });
+
+    // 既存ログ行だけ削除（empty-msg は残す）
+    container.querySelectorAll(".log-entry").forEach(el => el.remove());
+
+    if (filtered.length === 0) {
+      emptyMsg.style.display = "block";
+      logCountEl.textContent = `0 / ${totalCount} entries`;
+      return;
+    }
+
+    emptyMsg.style.display = "none";
+
+    const frag = document.createDocumentFragment();
+    filtered.forEach(e => {
+      const row = document.createElement("div");
+      row.className = "log-entry";
+
+      // タイムスタンプ (HH:MM:SS のみ表示)
+      const timeStr = e.ts_iso ? e.ts_iso.slice(11, 19) : formatTs(e.timestamp);
+
+      const modClass = getModClass(e.module || "");
+
+      row.innerHTML =
+        `<span class="ts">${escHtml(timeStr)}</span>` +
+        `<span class="mod ${modClass}">[${escHtml(e.module || "?")}]</span>` +
+        `<span class="msg">${escHtml(e.message || "")}</span>`;
+
+      frag.appendChild(row);
+    });
+
+    container.appendChild(frag);
+    logCountEl.textContent = `${filtered.length} / ${totalCount} entries`;
+
+    if (autoScrollCb.checked) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }
+
+  /* ── ユーティリティ ── */
+  function getModClass(mod) {
+    const map = {
+      "pink_bronson": "mod-pink_bronson",
+      "mainTST":      "mod-mainTST",
+      "STTWatcher":   "mod-STTWatcher",
+      "RolexBridge":  "mod-RolexBridge",
+      "GoldenChain":  "mod-GoldenChain",
+      "ViewerQueue":  "mod-ViewerQueue",
+    };
+    return map[mod] || "mod-default";
+  }
+
+  function formatTs(ms) {
+    if (!ms) return "--:--:--";
+    const d = new Date(ms);
+    return d.toTimeString().slice(0, 8);
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function updateStatus(ok) {
+    statusDot.className = ok ? "live" : "";
+    headerMeta.textContent = ok
+      ? `LIVE  ·  /system_logs (last 50)`
+      : "CONNECTION ERROR";
+  }
+
+  /* ══════════════════════════════════════════════════
+     フィルター操作
+     ══════════════════════════════════════════════════ */
+  document.getElementById("filter-input").addEventListener("input", (e) => {
+    filterText = e.target.value.trim().toLowerCase();
+    renderLogs();
+  });
+
+  document.querySelectorAll(".module-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".module-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      filterMod = btn.dataset.mod;
+      renderLogs();
+    });
+  });
+
+  document.getElementById("clear-btn").addEventListener("click", () => {
+    container.querySelectorAll(".log-entry").forEach(el => el.remove());
+    emptyMsg.style.display = "block";
+    logCountEl.textContent = "0 / 0 entries (view cleared)";
+  });
+</script>
+</body>
+</html>
