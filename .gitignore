@@ -1,6 +1,12 @@
 # APIキー・認証情報
 config.json
 Blue_Rayban/twitchtoken.txt
+**/gen-lang-client-*.json
+**/*service_account*.json
+
+# フォント (バイナリ)
+assets/fonts/*.ttf
+assets/fonts/*.otf
 Golden_Chain/pinkblonsonbeta/.env
 **/*.env
 

@@ -3,6 +3,22 @@
 ═══════════════════════════════════════════════════ */
 
 /* === フォント: OBSは外部リクエストをブロックする場合があるのでシステムフォントを使用 === */
+/* カスタムフォント: ファイルがあれば読み込み、なければフォールバックスタックに自動移行 */
+@font-face {
+    font-family: 'VT323';
+    src: url('../../../assets/fonts/VT323-Regular.ttf') format('truetype');
+    font-display: swap;
+}
+@font-face {
+    font-family: 'DotGothic16';
+    src: url('../../../assets/fonts/DotGothic16-Regular.ttf') format('truetype');
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Pixel Mplus 12';
+    src: url('../../../assets/fonts/PixelMplus12-Regular.ttf') format('truetype');
+    font-display: swap;
+}
 
 :root {
     --neon: #AAFF00;
@@ -19,8 +35,8 @@ body {
     padding: 0;
     background: transparent;
     overflow: hidden;
-    /* OBS 内蔵 CEF で動くシステムフォントスタック */
-    font-family: 'MS Gothic', 'Meiryo', 'Courier New', monospace;
+    /* OBS 内蔵 CEF: VT323(ASCII) → DotGothic16(日本語ピクセル) → Pixel Mplus 12 → Meiryo */
+    font-family: 'VT323', 'DotGothic16', 'Pixel Mplus 12', 'Meiryo', 'MS Gothic', monospace;
 }
 
 /* ══════════════════════════════════════
@@ -273,14 +289,14 @@ body {
 }
 
 #align-label {
-    font-family: 'DotGothic16', monospace;
+    font-family: 'VT323', 'DotGothic16', monospace;
     font-size: 11px;
     color: var(--neon);
     white-space: nowrap;
 }
 
 .ctrl-btn {
-    font-family: 'DotGothic16', monospace;
+    font-family: 'VT323', 'DotGothic16', monospace;
     font-size: 10px;
     background: var(--mid);
     color: var(--neon);

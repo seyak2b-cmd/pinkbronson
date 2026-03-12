@@ -1,0 +1,20 @@
+m+ FONT LICENSE
+
+Copyright (C) 2002-2013 itouhiro (Touhiro Suzuki)
+https://itouhiro.hatenablog.com/entry/20130602/font
+
+These fonts are free software.
+Unlimited permission is granted to use, copy, and distribute it, with or
+without modification, either commercially or noncommercially.
+THIS FONTS ARE PROVIDED "AS IS" WITHOUT WARRANTY.
+
+-----------------------------------------------------------
+APPLIES TO:
+  - PixelMplus10-Regular.ttf
+  - PixelMplus10-Bold.ttf
+  - PixelMplus12-Regular.ttf
+  - PixelMplus12-Bold.ttf
+
+Source & Project Page:
+  https://itouhiro.hatenablog.com/entry/20130602/font
+  https://github.com/itouhiro/PixelMplus

@@ -34,8 +34,33 @@ LED_OFF = '#122200'
 LED_RED = '#BB1100'
 MUTED   = '#606060'
 HEAD    = '#D0D0D0'
-FONT    = 'Courier New'
+FONT    = 'VT323'
+FONT_JP = 'Pixel Mplus 12'
 EM_GRN  = '#00FF88'  # Emerald accent
+
+
+def _load_custom_fonts():
+    """VT323 / Pixel Mplus 12 / DotGothic16 を Windows API でロード。"""
+    _here = os.path.dirname(os.path.abspath(__file__))
+    fonts_dir = None
+    for _ in range(6):
+        candidate = os.path.join(_here, 'assets', 'fonts')
+        if os.path.isdir(candidate):
+            fonts_dir = candidate
+            break
+        _here = os.path.dirname(_here)
+    if not fonts_dir:
+        return
+    try:
+        import ctypes
+        for fname in ('VT323-Regular.ttf', 'PixelMplus12-Regular.ttf', 'DotGothic16-Regular.ttf'):
+            fp = os.path.join(fonts_dir, fname)
+            if os.path.exists(fp):
+                ctypes.windll.gdi32.AddFontResourceExW(fp, 0x10, 0)
+    except Exception as e:
+        print(f"[Font] load failed: {e}")
+
+_load_custom_fonts()
 
 _BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(_BASE_DIR, "..", "config.json")
@@ -55,6 +80,37 @@ def _write_cfg(cfg: dict):
         print(f"[CFG] write error: {e}")
 
 
+# ── Win95 ライトテーマ ─────────────────────────────────────
+_W95 = {
+    'BG':      '#C0C0C0',
+    'PANEL':   '#D4D0C8',
+    'LCD_BG':  '#FFFFFF',
+    'LCD_FG':  '#000000',
+    'LCD_DIM': '#808080',
+    'BORDER':  '#808080',
+    'BTN_BG':  '#D4D0C8',
+    'BTN_FG':  '#000000',
+    'BTN_ACT': '#0000AA',
+    'LED_ON':  '#00AA00',
+    'LED_OFF': '#A0A0A0',
+    'LED_RED': '#CC0000',
+    'MUTED':   '#505050',
+    'HEAD':    '#000000',
+    'EM_GRN':  '#008000',
+    'FONT':    'MS Gothic',
+    'FONT_JP': 'MS Gothic',
+}
+
+def _setup_theme():
+    cfg = _read_cfg()
+    if cfg.get('theme', 'dark').lower() == 'light':
+        g = globals()
+        for k, v in _W95.items():
+            g[k] = v
+
+_setup_theme()
+
+
 class EmeraldRolexUI:
     MAX_CHAT = 6  # チャット表示の最大行数
 
@@ -65,6 +121,7 @@ class EmeraldRolexUI:
         self.root.minsize(660, 420)
         self.root.configure(bg=BG)
         self.root.protocol("WM_DELETE_WINDOW", self.cleanup_on_exit)
+        self._topmost = False
 
         self.process     = None
         self.base_dir    = _BASE_DIR
@@ -93,6 +150,15 @@ class EmeraldRolexUI:
                   relief='raised', bd=2, padx=10, pady=2,
                   cursor='hand2', activebackground=BTN_ACT,
                   activeforeground=LED_RED).pack(side='right', padx=12, pady=4)
+
+        self._top_btn = tk.Button(fr_head, text="▽",
+                  command=self.toggle_topmost,
+                  bg=BTN_BG, fg=HEAD, font=(FONT, 11, 'bold'),
+                  relief='raised', bd=2, padx=6, pady=2,
+                  cursor='hand2', activebackground=BTN_ACT,
+                  activeforeground=HEAD)
+        self._top_btn.pack(side='right', padx=4, pady=4)
+
         tk.Frame(self.root, bg=BORDER, height=2).pack(fill='x')
 
         # ── コントロールストリップ ─────────────────────
@@ -155,7 +221,7 @@ class EmeraldRolexUI:
                  bg=PANEL, fg=LCD_DIM, font=(FONT, 8)).pack(side='left', padx=10)
 
         self.log_text = scrolledtext.ScrolledText(
-            self._log_wrap, bg=LCD_BG, fg=LCD_FG, font=(FONT, 10),
+            self._log_wrap, bg=LCD_BG, fg=LCD_FG, font=(FONT_JP, 10),
             insertbackground=LCD_FG, selectbackground=LCD_DIM,
             selectforeground=LCD_FG, state='disabled', bd=0, relief='flat')
         self.log_text.pack(fill='both', expand=True, padx=8, pady=(2, 8))
@@ -255,6 +321,11 @@ class EmeraldRolexUI:
 
         return outer
 
+    def toggle_topmost(self):
+        self._topmost = not self._topmost
+        self.root.attributes('-topmost', self._topmost)
+        self._top_btn.config(text="▲" if self._topmost else "▽")
+
     def toggle_vvox(self):
         if self._vvox_open:
             self._vvox_frame.pack_forget()
@@ -341,11 +412,16 @@ class EmeraldRolexUI:
         self._vvox_status_var.set("Testing...")
 
     def _save_vvox(self):
+        try:
+            speaker = int(self._vvox_spk_var.get())
+        except ValueError:
+            self._vvox_status_var.set("❌ Speaker ID must be a number")
+            return
         cfg = _read_cfg()
         cfg.setdefault("emerald_rolex", {}).update({
             "voicevox_enabled": self._vvox_enabled_var.get(),
             "voicevox_url":     self._vvox_url_var.get().strip(),
-            "voicevox_speaker": int(self._vvox_spk_var.get()),
+            "voicevox_speaker": speaker,
             "voicevox_volume":  round(float(self._vol_var.get()), 2),
         })
         _write_cfg(cfg)

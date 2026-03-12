@@ -6,8 +6,57 @@
 """
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
-import os, json, threading, time, subprocess, queue, sys, wave
+import os, json, threading, time, subprocess, queue, sys, wave, webbrowser
 from datetime import datetime
+
+
+def _try_load_dseg():
+    """DSEG14 Classic フォントを Windows API でロードして返す。
+    assets/fonts/ に TTF がなければ Courier New にフォールバック。"""
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                     'assets', 'fonts', 'DSEG14Classic-Regular.ttf'),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                     'assets', 'fonts', 'DSEG7Classic-Regular.ttf'),
+    ]
+    try:
+        import ctypes
+        for fp in candidates:
+            if os.path.exists(fp):
+                ctypes.windll.gdi32.AddFontResourceExW(fp, 0x10, 0)
+                name = 'DSEG14 Classic' if 'DSEG14' in fp else 'DSEG7 Classic'
+                print(f"[Font] DSEG loaded: {name}")
+                return name
+    except Exception as e:
+        print(f"[Font] DSEG load failed: {e}")
+    return 'Courier New'
+
+
+def _load_custom_fonts():
+    """VT323 / Pixel Mplus 12 / DotGothic16 を Windows API でロード。
+    assets/fonts/ に TTF がなければ Tkinter のシステムフォントフォールバックに委ねる。"""
+    _here = os.path.dirname(os.path.abspath(__file__))
+    fonts_dir = None
+    for _ in range(6):
+        candidate = os.path.join(_here, 'assets', 'fonts')
+        if os.path.isdir(candidate):
+            fonts_dir = candidate
+            break
+        _here = os.path.dirname(_here)
+    if not fonts_dir:
+        return
+    try:
+        import ctypes
+        for fname in ('VT323-Regular.ttf', 'PixelMplus12-Regular.ttf', 'DotGothic16-Regular.ttf'):
+            fp = os.path.join(fonts_dir, fname)
+            if os.path.exists(fp):
+                ctypes.windll.gdi32.AddFontResourceExW(fp, 0x10, 0)
+                print(f"[Font] loaded: {fname}")
+    except Exception as e:
+        print(f"[Font] custom font load failed: {e}")
+
+_load_custom_fonts()
+
 from filelock import FileLock, Timeout
 import sounddevice as sd
 import numpy as np
@@ -59,20 +108,20 @@ THEMES = {
     },
     "light": {
         "mode": "light",
-        "bg_main":  "#e9e9f4",   # Soft lavender-white
-        "bg_panel": "#ffffff",
-        "bg_inset": "#f0f0fa",
-        "fg_main":  "#1a1b26",
-        "fg_muted": "#787c99",
-        "pink":     "#c53b53",
-        "cyan":     "#2e7de9",
-        "gold":     "#8c6c3e",
-        "emerald":  "#587539",
-        "purple":   "#7847bd",
-        "btn_bg":   "#d5d6e8",
-        "btn_act":  "#a8aecb",
-        "btn_stop": "#f4b8c3",
-        "prog_bg":  "#587539",
+        "bg_main":  "#C0C0C0",   # Win95 classic gray
+        "bg_panel": "#D4D0C8",   # Win95 button face
+        "bg_inset": "#FFFFFF",   # White (input fields)
+        "fg_main":  "#000000",   # Black
+        "fg_muted": "#808080",   # Gray
+        "pink":     "#800000",   # Maroon
+        "cyan":     "#000080",   # Navy blue
+        "gold":     "#808000",   # Olive
+        "emerald":  "#008000",   # Green
+        "purple":   "#800080",   # Purple
+        "btn_bg":   "#D4D0C8",   # Win95 button face
+        "btn_act":  "#0000AA",   # Win95 selection blue
+        "btn_stop": "#CC0000",   # Red
+        "prog_bg":  "#000080",   # Navy progress bar
     }
 }
 
@@ -454,20 +503,21 @@ class SettingsWindow(tk.Toplevel):
         self.on_save = on_save_callback
         
         self.title("PRODUCER SETTINGS")
-        self.geometry("420x820")
+        self.geometry("420x1020")
         self.resizable(False, False)
-        _bg  = "#1a1b26"   # Tokyo Night bg
-        _pan = "#24283b"   # panel
-        _inp = "#292e42"   # input field bg
-        _pink = "#f7768e"
-        _cyan = "#7dcfff"
-        _txt = "#c0caf5"
+        _th   = parent.theme
+        _bg   = _th["bg_main"]
+        _pan  = _th["bg_panel"]
+        _inp  = _th["btn_bg"]
+        _pink = _th["pink"]
+        _cyan = _th["cyan"]
+        _txt  = _th["fg_main"]
         self.configure(bg=_bg)
         self.attributes("-topmost", True)
         self.grab_set()
 
-        lbl_font  = ("Helvetica", 10, "bold")
-        entry_font = ("Courier", 10)
+        lbl_font  = ("VT323", 10, "bold")
+        entry_font = ("VT323", 11)
 
         def _section(label, color):
             tk.Label(self, text=label, bg=_bg, fg=color, font=lbl_font).pack(pady=(14, 2), anchor="w", padx=22)
@@ -480,9 +530,24 @@ class SettingsWindow(tk.Toplevel):
 
         # Theme
         _section("THEME", _cyan)
-        self.combo_theme = ttk.Combobox(self, values=["dark", "light"], state="readonly")
+        _sty = ttk.Style()
+        _sty.configure("Settings.TCombobox",
+                        fieldbackground=_inp, background=_pan,
+                        foreground=_txt, selectbackground=_th["btn_act"],
+                        selectforeground="#ffffff", arrowcolor=_cyan)
+        _sty.map("Settings.TCombobox",
+                 fieldbackground=[('readonly', 'focus', _inp), ('readonly', _inp)],
+                 foreground=[('readonly', 'focus', '#ffffff'), ('readonly', _txt)],
+                 selectbackground=[('readonly', _th["btn_act"])],
+                 selectforeground=[('readonly', '#ffffff')])
+        self.combo_theme = ttk.Combobox(self, values=["dark", "light"],
+                                        state="readonly", style="Settings.TCombobox")
         self.combo_theme.pack(fill=tk.X, padx=22)
         self.combo_theme.set(self.config.get("theme", "dark"))
+        self.option_add('*Settings.TCombobox*Listbox.background',       _inp)
+        self.option_add('*Settings.TCombobox*Listbox.foreground',       _txt)
+        self.option_add('*Settings.TCombobox*Listbox.selectBackground', _th["btn_act"])
+        self.option_add('*Settings.TCombobox*Listbox.selectForeground', '#ffffff')
 
         # APIs
         keys = self.config.get("api_keys", {})
@@ -521,7 +586,7 @@ class SettingsWindow(tk.Toplevel):
         tk.Checkbutton(notify_frame, text="Enable notification sound",
                        variable=self._notify_enabled,
                        bg=_bg, fg=_txt, selectcolor=_inp, activebackground=_bg,
-                       activeforeground=_txt, font=("Helvetica", 9)).pack(anchor="w")
+                       activeforeground=_txt, font=("VT323", 9)).pack(anchor="w")
 
         sound_row = tk.Frame(self, bg=_bg)
         sound_row.pack(fill=tk.X, padx=22, pady=(0, 2))
@@ -539,13 +604,13 @@ class SettingsWindow(tk.Toplevel):
                 self.ent_sound.insert(0, path)
 
         tk.Button(sound_row, text="Browse", command=_browse_sound,
-                  bg=_pan, fg=_txt, font=("Helvetica", 9), relief="flat",
+                  bg=_pan, fg=_txt, font=("VT323", 9), relief="flat",
                   cursor="hand2", padx=6).pack(side=tk.LEFT, padx=(4, 0))
 
         vol_frame = tk.Frame(self, bg=_bg)
         vol_frame.pack(fill=tk.X, padx=22, pady=(2, 0))
         tk.Label(vol_frame, text="Volume:", bg=_bg, fg=_txt,
-                 font=("Helvetica", 9)).pack(side=tk.LEFT)
+                 font=("VT323", 9)).pack(side=tk.LEFT)
         self._notify_vol = tk.DoubleVar(value=er_cfg.get("notify_volume", 1.0))
         tk.Scale(vol_frame, variable=self._notify_vol, from_=0.0, to=2.0,
                  resolution=0.1, orient=tk.HORIZONTAL, bg=_bg, fg=_txt,
@@ -566,14 +631,45 @@ class SettingsWindow(tk.Toplevel):
             threading.Thread(target=_play, daemon=True).start()
 
         tk.Button(self, text="▶ Test Sound", command=_test_sound,
-                  bg=_pan, fg=_cyan, font=("Helvetica", 9), relief="flat",
+                  bg=_pan, fg=_cyan, font=("VT323", 9), relief="flat",
                   cursor="hand2").pack(pady=(4, 0), anchor="w", padx=22)
 
+        # Startup AI greeting
+        startup_cfg = self.config.get("startup", {})
+        _DEFAULT_PROMPT = (
+            "あなたは８０年代の東京のテレビディレクターです、イケイケでギラギラです。"
+            "当時の業界用語（ザギンデシースーとかギロッポンまでタクるとか、テッペンちかいから"
+            "巻きでいうなど）をつかってこれから配信する配信者を励ましてテンションをあげる言葉をなげかけてください"
+        )
+
+        _section("STARTUP AI GREETING", _cyan)
+        greet_frame = tk.Frame(self, bg=_bg)
+        greet_frame.pack(fill=tk.X, padx=22, pady=(0, 4))
+        self._startup_greet = tk.BooleanVar(value=startup_cfg.get("ai_greet", False))
+        tk.Checkbutton(greet_frame,
+                       text="AI CALL & RESPONSE",
+                       variable=self._startup_greet,
+                       bg=_bg, fg=_txt, selectcolor=_inp,
+                       activebackground=_bg, activeforeground=_txt,
+                       font=("VT323", 9)).pack(anchor="w")
+
+        _section("GREETING PROMPT", _cyan)
+        self.txt_prompt = tk.Text(self, height=6, font=("VT323", 9),
+                                  bg=_inp, fg=_txt, insertbackground=_cyan,
+                                  relief="flat", bd=4, wrap=tk.WORD)
+        self.txt_prompt.pack(fill=tk.X, padx=22)
+        self.txt_prompt.insert("1.0", startup_cfg.get("greet_prompt", _DEFAULT_PROMPT))
+
         # SAVE
+        _is_light = _th.get("mode") == "light"
         btn_save = tk.Button(
             self, text="SAVE & APPLY", command=self.save_cfg,
-            bg=_cyan, fg="#1a1b26", font=("Helvetica", 12, "bold"),
-            relief="flat", cursor="hand2", activebackground="#b4e4ff")
+            bg="#C0C0C0" if _is_light else _cyan,
+            fg="#000000" if _is_light else "#1a1b26",
+            font=("VT323", 12, "bold"),
+            relief="raised" if _is_light else "flat",
+            cursor="hand2",
+            activebackground="#A0A0A0" if _is_light else "#b4e4ff")
         btn_save.pack(pady=28, fill=tk.X, padx=22, ipady=6)
 
     def save_cfg(self):
@@ -591,6 +687,9 @@ class SettingsWindow(tk.Toplevel):
         er["notify_enabled"] = self._notify_enabled.get()
         er["notify_sound"]   = self.ent_sound.get().strip()
         er["notify_volume"]  = round(self._notify_vol.get(), 1)
+        startup = self.config.setdefault("startup", {})
+        startup["ai_greet"]     = self._startup_greet.get()
+        startup["greet_prompt"] = self.txt_prompt.get("1.0", tk.END).strip()
         save_config(self.config)
         self.on_save()
         self.destroy()
@@ -605,8 +704,9 @@ class PinkBronsonUI(tk.Tk):
         self.theme = THEMES[self.cfg.get("theme", "dark")]
 
         self.title("PINK BRONSON")
-        self.geometry("400x940")
-        self.resizable(False, True)
+        self.geometry("400x960")
+        self.resizable(True, True)
+        self._topmost = True
         self.attributes("-topmost", True)
 
         # Set App Icon if PIL is available
@@ -630,10 +730,12 @@ class PinkBronsonUI(tk.Tk):
             "Emerald_Rolex": None
         }
         self._bloat_warned = False
+        self._dseg_font = _try_load_dseg()
 
         self.widgets = {} # For dynamic theme application
         self._build()
         self.apply_theme()
+        self._poll_config_changes()
 
         saved_mic = self.cfg.get("last_mic", "")
         if saved_mic and saved_mic in self.combo_mic["values"]:
@@ -643,6 +745,7 @@ class PinkBronsonUI(tk.Tk):
             
         self._meter.start(self.combo_mic.get())
         self._poll_stt_result()
+        self.after(800, self._run_startup_greet)
 
     def _build(self):
         # ══ Tokyo Night Header ══════════════════════════════════
@@ -666,30 +769,54 @@ class PinkBronsonUI(tk.Tk):
             except Exception as e:
                 print(f"BronsonR load error: {e}")
 
-        # Title + subtitle stack – center-left
-        fr_title_stack = tk.Frame(fr_header)
-        fr_title_stack.pack(side=tk.LEFT, fill=tk.Y)
+        # 画像右側の縦フレーム（タイトル上部 + ticker 下部）
+        fr_right = tk.Frame(fr_header)
+        fr_right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.widgets["fr_right"] = (fr_right, "bg_main")
+
+        # ── 上段: タイトル + ボタン ──
+        fr_top = tk.Frame(fr_right)
+        fr_top.pack(side=tk.TOP, fill=tk.X)
+        self.widgets["fr_top"] = (fr_top, "bg_main")
+
+        # ボタンを RIGHT に先に pack（タイトルが押し出されないよう）
+        self.btn_topmost = tk.Button(
+            fr_top, text="▲", command=self.toggle_topmost,
+            font=("VT323", 9, "bold"), relief="flat",
+            cursor="hand2", padx=4, pady=1)
+        self.btn_topmost.pack(side=tk.RIGHT, anchor="n", padx=(0, 0))
+        self.widgets["btn_topmost"] = (self.btn_topmost, "btn_bg", "cyan")
+
+        self.btn_set = tk.Button(
+            fr_top, text="⚙", command=self.open_settings,
+            font=("VT323", 9, "bold"), relief="flat",
+            cursor="hand2", padx=4, pady=1)
+        self.btn_set.pack(side=tk.RIGHT, anchor="n", padx=(0, 4))
+        self.widgets["btn_set"] = (self.btn_set, "btn_bg", "cyan")
+
+        fr_title_stack = tk.Frame(fr_top)
+        fr_title_stack.pack(side=tk.LEFT)
         self.widgets["fr_title_stack"] = (fr_title_stack, "bg_main")
 
         self.lbl_title = tk.Label(
             fr_title_stack, text="PINK BRONSON",
-            font=("Helvetica", 20, "bold"), anchor="w")
+            font=("VT323", 20, "bold"), anchor="w")
         self.lbl_title.pack(anchor="w")
         self.widgets["lbl_title"] = (self.lbl_title, "bg_main", "pink")
 
         self.lbl_sub = tk.Label(
             fr_title_stack, text="The Producer's Desk",
-            font=("Helvetica", 9), anchor="w")
-        self.lbl_sub.pack(anchor="w", pady=(1, 0))
+            font=("VT323", 9), anchor="w")
+        self.lbl_sub.pack(anchor="w")
         self.widgets["lbl_sub"] = (self.lbl_sub, "bg_main", "cyan")
 
-        # Settings button – right side
-        self.btn_set = tk.Button(
-            fr_header, text="⚙", command=self.open_settings,
-            font=("Helvetica", 13, "bold"), relief="flat",
-            cursor="hand2", padx=8, pady=4)
-        self.btn_set.pack(side=tk.RIGHT, anchor="n", padx=(0, 4))
-        self.widgets["btn_set"] = (self.btn_set, "btn_bg", "cyan")
+        # ── 下段: AI Greeting ticker（画像下端に揃う）──
+        self._greet_text      = ""
+        self._greet_x         = 0.0
+        self._greet_ticker_id = None
+        self.greet_canvas = tk.Canvas(fr_right, height=22, highlightthickness=0, bd=0)
+        self.greet_canvas.pack(side=tk.BOTTOM, fill=tk.X)
+        self.widgets["greet_canvas"] = (self.greet_canvas, "bg_main")
 
         # Neon separator line
         fr_sep = tk.Frame(self, height=2)
@@ -697,17 +824,25 @@ class PinkBronsonUI(tk.Tk):
         fr_sep.pack_propagate(False)
         self.widgets["fr_sep"] = (fr_sep, "pink")
 
-        # ── MIC ──
-        frame_mic = tk.Frame(self)
-        frame_mic.pack(fill=tk.X, padx=20, pady=(10,0))
-        self.widgets["frame_mic"] = (frame_mic, "bg_main")
+        # ── MIC (LCD スタイル) ──
+        _LCD_BG   = '#0A1400'
+        _LCD_DIM  = '#1E3000'
+        _LCD_FG   = '#7AAA00'
+        _LCD_EDGE = '#2A4400'
 
-        self.lbl_mic = tk.Label(frame_mic, text="MIC SELECT", font=("Helvetica", 9, "bold"))
-        self.lbl_mic.pack(side=tk.LEFT)
-        self.widgets["lbl_mic"] = (self.lbl_mic, "bg_main", "gold")
+        fr_mic_bezel = tk.Frame(self, bg=_LCD_EDGE, bd=0)
+        fr_mic_bezel.pack(fill=tk.X, padx=20, pady=(10, 0))
 
-        self.combo_mic = ttk.Combobox(frame_mic, values=get_input_devices(), state="readonly", width=26)
-        self.combo_mic.pack(side=tk.LEFT, padx=8)
+        frame_mic = tk.Frame(fr_mic_bezel, bg=_LCD_BG)
+        frame_mic.pack(fill=tk.X, padx=2, pady=2)
+
+        self.lbl_mic = tk.Label(frame_mic, text="MIC SELECT",
+                                font=("VT323", 9, "bold"), bg=_LCD_BG, fg=_LCD_FG)
+        self.lbl_mic.pack(side=tk.LEFT, padx=(8, 0))
+
+        self.combo_mic = ttk.Combobox(frame_mic, values=get_input_devices(),
+                                      state="readonly", style="Mic.TCombobox")
+        self.combo_mic.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=8, pady=4)
         self.combo_mic.bind("<<ComboboxSelected>>", self._on_mic_change)
 
         # ── STT Backend ──
@@ -715,7 +850,7 @@ class PinkBronsonUI(tk.Tk):
         fr_backend.pack(fill=tk.X, padx=20, pady=(10, 0))
         self.widgets["fr_backend"] = (fr_backend, "bg_main")
 
-        tk.Label(fr_backend, text="STT ENGINE", font=("Helvetica", 9, "bold")).pack(side=tk.LEFT)
+        tk.Label(fr_backend, text="STT ENGINE", font=("VT323", 9, "bold")).pack(side=tk.LEFT)
         self.widgets["lbl_backend"] = (fr_backend.winfo_children()[0], "bg_main", "gold")
 
         self.stt_backend_var = tk.StringVar(value=self.cfg.get("stt_backend", "whisper"))
@@ -748,32 +883,36 @@ class PinkBronsonUI(tk.Tk):
 
         rb_whisper = tk.Radiobutton(fr_backend, text="Local Whisper",
                                     variable=self.stt_backend_var, value="whisper",
-                                    font=("Helvetica", 9), relief="flat", cursor="hand2")
+                                    font=("VT323", 9), relief="flat", cursor="hand2")
         rb_whisper.pack(side=tk.LEFT, padx=(12, 0))
         self.widgets["rb_whisper"] = (rb_whisper, "bg_main", "fg_main")
 
         rb_gemini = tk.Radiobutton(fr_backend, text="Gemini API",
                                    variable=self.stt_backend_var, value="gemini",
-                                   font=("Helvetica", 9), relief="flat", cursor="hand2")
+                                   font=("VT323", 9), relief="flat", cursor="hand2")
         rb_gemini.pack(side=tk.LEFT, padx=(8, 0))
         self.widgets["rb_gemini"] = (rb_gemini, "bg_main", "cyan")
 
         # ── STT Controls ──
-        self.lbl_status = tk.Label(self, text="STT: Stopped", font=("Helvetica", 10, "bold"))
+        self.lbl_status = tk.Label(self, text="STT: Stopped", font=("VT323", 10, "bold"))
         self.lbl_status.pack(pady=(10, 0))
         self.widgets["lbl_status"] = (self.lbl_status, "bg_main", "fg_main")
         _on_backend_change()   # lbl_status 作成後に初期表示を反映
 
-        self.btn_stt = tk.Button(self, text="▶  START  /  ■  STOP", command=self.toggle_stt, font=("Helvetica", 11, "bold"), relief="flat", cursor="hand2")
+        self.btn_stt = tk.Button(self, text="▶  START  /  ■  STOP", command=self.toggle_stt, font=("VT323", 11, "bold"), relief="flat", cursor="hand2")
         self.btn_stt.pack(fill=tk.X, padx=20, pady=(8,4), ipady=5)
         self.widgets["btn_stt"] = (self.btn_stt, "btn_bg", "fg_main", "btn_act")
 
-        self.meter_var = tk.IntVar(value=0)
-        self.meter = ttk.Progressbar(self, orient="horizontal", length=330, mode="determinate", variable=self.meter_var)
-        self.meter.pack(pady=(2, 12), padx=20)
+        self._meter_level = 0
+        fr_meter_bezel = tk.Frame(self, bg='#2A4400', bd=0)
+        fr_meter_bezel.pack(fill=tk.X, padx=20, pady=(2, 12))
+        self.meter_canvas = tk.Canvas(fr_meter_bezel, height=14, bg='#7AAA00',
+                                      highlightthickness=0, bd=0)
+        self.meter_canvas.pack(fill=tk.X, padx=2, pady=2)
+        self.meter_canvas.bind('<Configure>', lambda _e: self._draw_meter_dots())
 
         # ── Latest Phrase ──
-        self.lbl_late_title = tk.Label(self, text="LATEST PHRASE", font=("Helvetica", 8, "bold"))
+        self.lbl_late_title = tk.Label(self, text="LATEST PHRASE", font=("VT323", 8, "bold"))
         self.lbl_late_title.pack()
         self.widgets["lbl_late_title"] = (self.lbl_late_title, "bg_main", "gold")
 
@@ -781,38 +920,23 @@ class PinkBronsonUI(tk.Tk):
         self.frame_lat.pack(fill=tk.X, padx=20, pady=(4, 12))
         self.widgets["frame_lat"] = (self.frame_lat, "bg_panel")
 
-        self.lbl_latest = tk.Label(self.frame_lat, text="(Standby...)", font=("Helvetica", 13, "bold"), wraplength=320, justify="center", height=2)
+        self.lbl_latest = tk.Label(self.frame_lat, text="(Standby...)", font=("Pixel Mplus 12", 13, "bold"), wraplength=320, justify="center", height=2)
         self.lbl_latest.pack(padx=10, pady=8)
         self.widgets["lbl_latest"] = (self.lbl_latest, "bg_panel", "cyan")
 
-        self.lbl_bloat = tk.Label(self, text="", font=("Helvetica", 8, "bold"), wraplength=340, justify="center")
+        self.lbl_bloat = tk.Label(self, text="", font=("VT323", 8, "bold"), wraplength=340, justify="center")
         self.widgets["lbl_bloat"] = (self.lbl_bloat, "bg_main", "pink")
 
-        # ── Session Log ──
-        self.lbl_log_title = tk.Label(self, text="SESSION LOG", font=("Helvetica", 8, "bold"))
-        self.lbl_log_title.pack()
-        self.widgets["lbl_log_title"] = (self.lbl_log_title, "bg_main", "fg_muted")
-
-        self.txt_log = scrolledtext.ScrolledText(self, font=("Helvetica", 10), wrap=tk.WORD, height=10, relief="flat", bd=0, insertbackground="white")
-        self.txt_log.pack(fill=tk.BOTH, expand=True, padx=20, pady=(4,4))
-        self.txt_log.insert(tk.END, "─── Session Started ───\n")
-        
-        self.txt_log.tag_configure("log_token", foreground="#00F0FF")
-        self.txt_log.tag_configure("log_api", foreground="#AAFF00")
-        self.txt_log.tag_configure("log_error", foreground="#FF007F")
-        self.txt_log.tag_configure("log_warn", foreground="#FFD700")
-        self.txt_log.tag_configure("log_default", foreground="#CCCCCC")
-
-        self.txt_log.configure(state="disabled")
-        self.widgets["txt_log"] = (self.txt_log, "bg_inset", "fg_main")
+        # ── Monitor + Status ──
+        self._build_status_panel()
 
         # ── Child Services ──
-        self.fr_child = tk.LabelFrame(self, text=" CHILD SERVICES ", font=("Helvetica", 8, "bold"), bd=1)
+        self.fr_child = tk.LabelFrame(self, text=" CHILD SERVICES ", font=("VT323", 8, "bold"), bd=1)
         self.fr_child.pack(fill=tk.X, padx=20, pady=(8, 16), ipady=4)
         self.widgets["fr_child"] = (self.fr_child, "bg_main", "fg_muted")
 
         # 1. Golden_Chain (要約)
-        self.btn_golden = tk.Button(self.fr_child, text="Launch Golden_Chain (Summarizer)", command=lambda: self.toggle_proc("Golden_Chain", "golden_chain.py"), font=("Helvetica", 10, "bold"), relief="flat", cursor="hand2")
+        self.btn_golden = tk.Button(self.fr_child, text="Launch Golden_Chain (Summarizer)", command=lambda: self.toggle_proc("Golden_Chain", "golden_chain.py"), font=("VT323", 10, "bold"), relief="flat", cursor="hand2")
         self.btn_golden.pack(fill=tk.X, padx=10, pady=(8, 4), ipady=3)
         self.widgets["btn_golden"] = (self.btn_golden, "bg_panel", "gold", "btn_act")
 
@@ -821,7 +945,7 @@ class PinkBronsonUI(tk.Tk):
         fr_rayban.pack(fill=tk.X, padx=10, pady=(4, 4))
         self.widgets["fr_rayban"] = (fr_rayban, "bg_panel")
         
-        self.btn_rayban = tk.Button(fr_rayban, text="Launch Blue_RAY-BAN (Translator)", command=lambda: self.toggle_proc("Blue_RAY-BAN", "blue_rayban.py"), font=("Helvetica", 10, "bold"), relief="flat", cursor="hand2")
+        self.btn_rayban = tk.Button(fr_rayban, text="Launch Blue_RAY-BAN (Translator)", command=lambda: self.toggle_proc("Blue_RAY-BAN", "blue_rayban.py"), font=("VT323", 10, "bold"), relief="flat", cursor="hand2")
         self.btn_rayban.pack(fill=tk.X, expand=True, ipady=3)
         self.widgets["btn_rayban"] = (self.btn_rayban, "bg_panel", "cyan", "btn_act")
 
@@ -830,9 +954,149 @@ class PinkBronsonUI(tk.Tk):
         fr_rolex.pack(fill=tk.X, padx=10, pady=(4, 8))
         self.widgets["fr_rolex"] = (fr_rolex, "bg_panel")
 
-        self.btn_rolex = tk.Button(fr_rolex, text="Launch Emerald_Rolex (Chat viewer)", command=lambda: self.toggle_proc("Emerald_Rolex", "emerald_rolex.py"), font=("Helvetica", 10, "bold"), relief="flat", cursor="hand2")
+        self.btn_rolex = tk.Button(fr_rolex, text="Launch Emerald_Rolex (Chat viewer)", command=lambda: self.toggle_proc("Emerald_Rolex", "emerald_rolex.py"), font=("VT323", 10, "bold"), relief="flat", cursor="hand2")
         self.btn_rolex.pack(fill=tk.X, expand=True, ipady=3)
         self.widgets["btn_rolex"] = (self.btn_rolex, "bg_panel", "emerald", "btn_act")
+
+    # ══════════════════════════════════════════════════════
+    #  MONITOR ボタン + STATUS パネル (LCD スタイル)
+    # ══════════════════════════════════════════════════════
+    def _build_status_panel(self):
+        _LCD_BG   = '#0A1400'   # 液晶パネル背景
+        _LCD_DIM  = '#1E3000'   # 非アクティブセグメント色
+        _LCD_FG   = '#7AAA00'   # アクティブ文字
+        _LCD_EDGE = '#2A4400'   # 外枠
+        dseg = self._dseg_font
+
+        # MONITOR ボタン
+        monitor_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "monitor.html"))
+        btn_mon = tk.Button(
+            self, text="📊  MONITOR",
+            command=lambda: webbrowser.open('file:///' + monitor_path.replace('\\', '/')),
+            font=("VT323", 10, "bold"), relief="flat", cursor="hand2")
+        btn_mon.pack(fill=tk.X, padx=20, pady=(0, 5), ipady=3)
+        self.widgets["btn_monitor"] = (btn_mon, "bg_panel", "fg_main", "btn_act")
+
+        # 外枠 (LCD っぽいベゼル)
+        fr_bezel = tk.Frame(self, bg=_LCD_EDGE, bd=0)
+        fr_bezel.pack(fill=tk.X, padx=20, pady=(0, 12))
+
+        # LCD 内パネル
+        fr_lcd = tk.Frame(fr_bezel, bg=_LCD_BG)
+        fr_lcd.pack(fill=tk.X, padx=2, pady=2)
+        fr_lcd.columnconfigure(1, weight=1)
+
+        # タイトルバー
+        fr_hdr = tk.Frame(fr_lcd, bg='#0F1E00', pady=2)
+        fr_hdr.grid(row=0, column=0, columnspan=3, sticky='ew')
+        tk.Label(fr_hdr, text='◀  SERVICE STATUS  ▶',
+                 bg='#0F1E00', fg=_LCD_DIM,
+                 font=('VT323', 8, 'bold')).pack(side='left', padx=8)
+
+        # バッジ状態定義
+        self._stat_colors = {
+            'ok':  ('#006622', '#44FF88'),
+            'snd': ('#003377', '#44CCFF'),
+            'rcv': ('#774400', '#FFAA33'),
+            'err': ('#660011', '#FF3355'),
+            'off': (_LCD_BG,   _LCD_DIM),
+        }
+        self._stat_badge_text = {
+            'ok':  ' OK ',
+            'snd': ' SND',
+            'rcv': ' RCV',
+            'err': ' ERR',
+            'off': '----',
+        }
+        self._stat_labels = {}
+
+        wc  = self.cfg.get('web_config', {})
+        api = self.cfg.get('api_keys', {})
+        ai_name  = 'Gemini 2.0 Flash' if api.get('gemini_key') else 'Not configured'
+        stt_name = 'Gemini API' if self.cfg.get('stt_backend') == 'gemini' else 'Whisper (local)'
+        if wc.get('tts_engine') == 'google_cloud':
+            tts_name = f"GCloud  {wc.get('gcloud_tts_voice', 'Wavenet')}"
+        else:
+            tts_name = f"Gemini TTS  {wc.get('tts_voice', 'Kore')}"
+
+        rows = [
+            ('ai',  'AI',  ai_name,  'ok' if api.get('gemini_key') else 'off'),
+            ('stt', 'STT', stt_name, 'off'),
+            ('tts', 'TTS', tts_name, 'off'),
+        ]
+        for i, (key, lbl_text, val_text, init) in enumerate(rows):
+            data_row = 1 + i * 2   # 1,3,5  (偶数行はセパレータ用)
+
+            # キーラベル (常時 dim)
+            tk.Label(fr_lcd, text=lbl_text,
+                     bg=_LCD_BG, fg=_LCD_DIM,
+                     font=('VT323', 9, 'bold'), width=4, anchor='e'
+                     ).grid(row=data_row, column=0, padx=(8, 4), pady=5, sticky='e')
+
+            # 値ラベル (LCD グリーン)
+            val_lbl = tk.Label(fr_lcd, text=val_text,
+                               bg=_LCD_BG, fg=_LCD_FG,
+                               font=('VT323', 9), anchor='w')
+            val_lbl.grid(row=data_row, column=1, padx=(0, 4), pady=5, sticky='ew')
+
+            # バッジ (DSEG フォント)
+            badge = tk.Label(fr_lcd, text='----',
+                             bg=_LCD_BG, fg=_LCD_DIM,
+                             font=(dseg, 10, 'bold'), width=5, anchor='center')
+            badge.grid(row=data_row, column=2, padx=(0, 8), pady=5)
+
+            # 行区切り (最終行以外)
+            if i < len(rows) - 1:
+                tk.Frame(fr_lcd, bg=_LCD_DIM, height=1
+                         ).grid(row=data_row + 1, column=0, columnspan=3,
+                                sticky='ew', padx=6)
+
+            self._stat_labels[key] = (val_lbl, badge)
+            self._set_status(key, init)
+
+    def _set_status(self, key, state, val_text=None):
+        """key: 'ai'|'stt'|'tts'
+           state: 'ok'|'snd'|'rcv'|'err'|'off'|None (None=テキストのみ更新)"""
+        if not hasattr(self, '_stat_labels') or key not in self._stat_labels:
+            return
+        val_lbl, badge = self._stat_labels[key]
+        if state is not None:
+            bg, fg = self._stat_colors.get(state, self._stat_colors['off'])
+            badge.config(text=self._stat_badge_text.get(state, '----'), bg=bg, fg=fg)
+        if val_text is not None:
+            val_lbl.config(text=val_text)
+
+    def _poll_config_changes(self):
+        """config.json を定期再読み込みし STATUS パネルの表示値を更新する。"""
+        try:
+            nc  = load_config()
+            wc  = nc.get('web_config', {})
+            api = nc.get('api_keys', {})
+            ai_text  = 'Gemini 2.0 Flash' if api.get('gemini_key') else 'Not configured'
+            stt_text = 'Gemini API' if nc.get('stt_backend') == 'gemini' else 'Whisper (local)'
+            if wc.get('tts_engine') == 'google_cloud':
+                tts_text = f"GCloud  {wc.get('gcloud_tts_voice', '?')}"
+            else:
+                tts_text = f"Gemini TTS  {wc.get('tts_voice', 'Kore')}"
+            self._set_status('ai',  None, ai_text)
+            self._set_status('stt', None, stt_text)
+            self._set_status('tts', None, tts_text)
+        except Exception:
+            pass
+        self.after(5000, self._poll_config_changes)
+
+    def _set_font_recursive(self, parent, family):
+        """ウィジェットツリーを再帰走査してフォントファミリーを置換する。"""
+        import tkinter.font as tkfont
+        for w in parent.winfo_children():
+            try:
+                f = w.cget("font")
+                if f:
+                    fa = tkfont.Font(font=f).actual()
+                    w.config(font=(family, fa['size'], fa['weight']))
+            except Exception:
+                pass
+            self._set_font_recursive(w, family)
 
     def apply_theme(self):
         """Applies colors to all registered widgets based on current self.theme"""
@@ -861,6 +1125,101 @@ class PinkBronsonUI(tk.Tk):
         sty.theme_use("default")
         sty.configure("TCombobox", fieldbackground=self.theme["bg_panel"], background=self.theme["bg_panel"], foreground=self.theme["fg_main"])
         sty.configure("pb.Horizontal.TProgressbar", background=self.theme["prog_bg"], thickness=10)
+        # MIC / Meter LCD スタイル (テーマ非依存・固定)
+        sty.configure("Mic.TCombobox",
+                      fieldbackground='#0A1400', background='#2A4400',
+                      foreground='#7AAA00', selectbackground='#0A1400',
+                      selectforeground='#AAFF44', arrowcolor='#7AAA00')
+        sty.map("Mic.TCombobox",
+                fieldbackground=[('readonly', 'focus', '#0A1400'), ('readonly', '#0A1400')],
+                foreground=[('readonly', 'focus', '#AAFF44'), ('readonly', '#7AAA00')],
+                selectforeground=[('readonly', '#AAFF44')],
+                selectbackground=[('readonly', '#0A1400')])
+        # MIC Combobox ドロップダウンリスト (OSネイティブ部分) の色
+        self.option_add('*TCombobox*Listbox.background',        '#0A1400')
+        self.option_add('*TCombobox*Listbox.foreground',        '#7AAA00')
+        self.option_add('*TCombobox*Listbox.selectBackground',  '#1E3000')
+        self.option_add('*TCombobox*Listbox.selectForeground',  '#AAFF44')
+
+        if self.theme.get("mode") == "light":
+            self._set_font_recursive(self, 'MS Gothic')
+
+    def _run_startup_greet(self):
+        startup = self.cfg.get("startup", {})
+        if not startup.get("ai_greet", False):
+            return
+        gemini_key = self.cfg.get("api_keys", {}).get("gemini_key", "")
+        prompt = startup.get("greet_prompt", "").strip()
+        if not gemini_key or not prompt:
+            return
+        # テンプレート変数を展開
+        now = datetime.now()
+        prompt = prompt.replace("{current_time}", now.strftime("%H:%M"))
+        prompt = prompt.replace("{date}",         now.strftime("%Y-%m-%d"))
+        prompt = prompt.replace("{channel}",      self.cfg.get("api_keys", {}).get("twitch_channel", ""))
+        self._show_greet("▶  Connecting to AI...  ◀")
+        def _fetch():
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=gemini_key)
+                model = genai.GenerativeModel("gemini-2.0-flash")
+                print("[Greet] Calling Gemini...")
+                resp = model.generate_content(prompt)
+                try:
+                    text = resp.text.strip()
+                except Exception as te:
+                    text = f"[Response parse error: {te}]"
+                print(f"[Greet] Got response: {text[:60]}...")
+                try:
+                    from system_logger import send_system_log
+                    send_system_log("AI Greeting", text)
+                except Exception:
+                    pass
+                self.after(0, lambda t=text: self._show_greet(t))
+            except Exception as e:
+                print(f"[Greet] API error: {e}")
+                self.after(0, lambda err=str(e): self._show_greet(f"[AI Error: {err}]"))
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _show_greet(self, text: str):
+        import re
+        text = re.sub(r'\*+', '', text)          # ** markdown 除去
+        text = re.sub(r'[\r\n]+', '　', text)    # 改行 → 全角スペース
+        text = re.sub(r' {2,}', ' ', text).strip()
+        self._greet_text = "   " + text + "   "
+        if self._greet_ticker_id:
+            self.after_cancel(self._greet_ticker_id)
+            self._greet_ticker_id = None
+        c = self.greet_canvas
+        c.delete("all")
+        w = c.winfo_width() or 400
+        self._greet_x = float(w)
+        c.create_text(self._greet_x, 11,
+                      text=self._greet_text,
+                      font=("VT323", 13), fill=self.theme.get("cyan", "#7dcfff"),
+                      anchor="w", tags="ticker")
+        self._animate_greet()
+
+    def _animate_greet(self):
+        if not self._greet_text:
+            return
+        c = self.greet_canvas
+        c.move("ticker", -2, 0)
+        coords = c.coords("ticker")
+        if coords:
+            bbox = c.bbox("ticker")
+            if bbox and coords[0] + (bbox[2] - bbox[0]) < 0:
+                # 1回流れ終わったら停止
+                c.delete("ticker")
+                self._greet_text = ""
+                self._greet_ticker_id = None
+                return
+        self._greet_ticker_id = self.after(40, self._animate_greet)
+
+    def toggle_topmost(self):
+        self._topmost = not self._topmost
+        self.attributes("-topmost", self._topmost)
+        self.btn_topmost.config(text="▲" if self._topmost else "▽")
 
     def open_settings(self):
         SettingsWindow(self, self.cfg, self.on_settings_saved)
@@ -1017,37 +1376,68 @@ class PinkBronsonUI(tk.Tk):
             self._append_child_log(name, f"[System] {full_name} UI closed.")
             
     def _append_child_log(self, name: str, text: str):
-        now = datetime.now().strftime("%H:%M:%S")
-        tag = "log_default"
-        text_upper = text.upper()
-        if "[TOKEN]" in text_upper: tag = "log_token"
-        elif "[API]" in text_upper: tag = "log_api"
-        elif "[ERROR]" in text_upper or "EXCEPTION" in text_upper or "TRACEBACK" in text_upper: tag = "log_error"
-        elif "[WARN]" in text_upper: tag = "log_warn"
-        
-        self.txt_log.configure(state="normal")
-        self.txt_log.insert(tk.END, f"[{now}] [{name}] {text}\n", tag)
-        self.txt_log.see(tk.END)
-        self.txt_log.configure(state="disabled")
+        """子プロセスのログをステータスバッジに反映する。"""
+        t = text
+        if name == "Blue_RAY-BAN":
+            if "Gemini API 接続完了" in t or ("✅ Gemini" in t and "接続" in t):
+                self._set_status('ai', 'ok')
+            elif "[WebTTS] ✅" in t:
+                self._set_status('tts', 'snd')
+                self.after(2000, lambda: self._set_status('tts', 'ok'))
+            elif "[WebTTS] ❌" in t:
+                self._set_status('tts', 'err')
+            elif "TRANSLATION MODULE  ONLINE" in t:
+                self._set_status('tts', 'ok')
+            elif "[STTWatcher] 🎤" in t or "[STT_RESULT]" in t:
+                self._set_status('stt', 'rcv')
+                self.after(1500, lambda: self._set_status('stt', 'ok'))
+            elif "Firebase" in t and ("送信完了" in t or "OK" in t):
+                self._set_status('ai', 'snd')
+                self.after(1500, lambda: self._set_status('ai', 'ok'))
+            elif ("ERROR" in t.upper() or "エラー" in t) and "Gemini" in t:
+                self._set_status('ai', 'err')
+        elif name == "Emerald_Rolex":
+            if "IRC接続完了" in t or "ONLINE" in t:
+                self._set_status('ai', 'ok')
+            elif "ERROR" in t.upper() or "エラー" in t:
+                pass  # Rolex error: no specific badge key
 
     # ── Thread-Safe Updaters ──
     def update_status(self, text: str, color: str):
         self.lbl_status.config(text=f"STT: {text}")
-        if color == "red" or color == "tomato": self.lbl_status.config(fg=self.theme["pink"])
-        elif color == "lime" or color == "lightgreen": self.lbl_status.config(fg=self.theme["cyan"])
-        elif color == "orange" or color == "yellow": self.lbl_status.config(fg=self.theme["gold"])
+        if color == "red" or color == "tomato":
+            self.lbl_status.config(fg=self.theme["pink"])
+            self._set_status('stt', 'err')
+        elif color == "lime" or color == "lightgreen":
+            self.lbl_status.config(fg=self.theme["cyan"])
+            self._set_status('stt', 'ok')
+        elif color == "orange" or color == "yellow":
+            self.lbl_status.config(fg=self.theme["gold"])
+            self._set_status('stt', 'ok')
 
     def update_meter(self, vol: int):
-        self.meter_var.set(vol)
+        self._meter_level = vol
+        self._draw_meter_dots()
+
+    def _draw_meter_dots(self):
+        c = self.meter_canvas
+        w = c.winfo_width()
+        h = c.winfo_height()
+        if w < 10:
+            return
+        c.delete('dot')
+        n = 28
+        dot_w = (w - 4) / n
+        active = int(self._meter_level / 100 * n)
+        for i in range(active):
+            x1 = int(2 + i * dot_w) + 1
+            x2 = int(2 + (i + 1) * dot_w) - 1
+            c.create_rectangle(x1, 2, x2, h - 2, fill='#0A1400', outline='', tags='dot')
 
     def on_transcribed(self, text: str):
-        engine_tag = "[G]" if self._stt.stt_backend == "gemini" else "[L]"
         self.lbl_latest.config(text=text)
-        now = datetime.now().strftime("%H:%M:%S")
-        self.txt_log.configure(state="normal")
-        self.txt_log.insert(tk.END, f"[{now}]{engine_tag} {text}\n")
-        self.txt_log.see(tk.END)
-        self.txt_log.configure(state="disabled")
+        self._set_status('stt', 'snd')
+        self.after(1500, lambda: self._set_status('stt', 'ok'))
         # Blue_RAY-BAN ブリッジファイルへ書き込み
         try:
             bridge = os.path.join(DATA_DIR, "stt_bridge.json")
@@ -1073,11 +1463,8 @@ class PinkBronsonUI(tk.Tk):
                 ja = d.get("text", "")
                 en = d.get("en", "")
                 if ja and en:
-                    now = datetime.now().strftime("%H:%M:%S")
-                    self.txt_log.configure(state="normal")
-                    self.txt_log.insert(tk.END, f"[{now}][BR] {ja}  →  {en}\n", "log_api")
-                    self.txt_log.see(tk.END)
-                    self.txt_log.configure(state="disabled")
+                    self._set_status('tts', 'rcv')
+                    self.after(2000, lambda: self._set_status('tts', 'ok'))
             except Exception:
                 pass
             self.after(1500, _check)

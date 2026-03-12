@@ -10,13 +10,30 @@
  * ═══════════════════════════════════════════════════════════════
  */
 
+/* ── カスタムフォント (OBSブラウザソース用: file://ページ相対パスで解決) ── */
+@font-face {
+    font-family: 'VT323';
+    src: url('../../../assets/fonts/VT323-Regular.ttf') format('truetype');
+    font-display: swap;
+}
+@font-face {
+    font-family: 'DotGothic16';
+    src: url('../../../assets/fonts/DotGothic16-Regular.ttf') format('truetype');
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Pixel Mplus 12';
+    src: url('../../../assets/fonts/PixelMplus12-Regular.ttf') format('truetype');
+    font-display: swap;
+}
+
 /* ── 基本リセット ── */
 body {
     margin: 0;
     padding: 0;
     background-color: rgba(0, 0, 0, 0);
     overflow: hidden;
-    font-family: 'MS Gothic', 'Meiryo', 'Courier New', monospace;
+    font-family: 'VT323', 'DotGothic16', 'Pixel Mplus 12', 'Meiryo', 'MS Gothic', monospace;
 }
 
 /* ── Chat Container ── */

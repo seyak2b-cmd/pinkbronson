@@ -6,9 +6,35 @@ import os
 import json
 import html
 import webbrowser
+
+FONT    = 'VT323'
+FONT_JP = 'Pixel Mplus 12'
+
+
+def _load_custom_fonts():
+    """VT323 / Pixel Mplus 12 / DotGothic16 を Windows API でロード。"""
+    _here = os.path.dirname(os.path.abspath(__file__))
+    fonts_dir = None
+    for _ in range(6):
+        candidate = os.path.join(_here, 'assets', 'fonts')
+        if os.path.isdir(candidate):
+            fonts_dir = candidate
+            break
+        _here = os.path.dirname(_here)
+    if not fonts_dir:
+        return
+    try:
+        import ctypes
+        for fname in ('VT323-Regular.ttf', 'PixelMplus12-Regular.ttf', 'DotGothic16-Regular.ttf'):
+            fp = os.path.join(fonts_dir, fname)
+            if os.path.exists(fp):
+                ctypes.windll.gdi32.AddFontResourceExW(fp, 0x10, 0)
+    except Exception as e:
+        print(f"[Font] load failed: {e}")
+
+_load_custom_fonts()
 import google.generativeai as genai
 from datetime import datetime, timezone
-from obs_helper import OBSDisplayHelper
 from PIL import Image, ImageTk
 import platform
 import sys
@@ -66,10 +92,6 @@ class AquareadControlPanel:
         # Config file
         self.config_file = os.path.join(self.project_root, 'config.json')
         self.load_config()
-
-        # Initialize OBS Helper
-        self.obs_helper = OBSDisplayHelper(
-            self.project_root, self.config, self.save_config)
 
         # Initialize Audio Processor
         self.audio_processor = AudioProcessor(self.config, self.project_root)
@@ -141,13 +163,13 @@ class AquareadControlPanel:
                 label.pack(fill='both', expand=True)
             else:
                 # Text fallback
-                tk.Label(splash, text="AQUAREAD", font=('Courier New', 40, 'bold'),
+                tk.Label(splash, text="AQUAREAD", font=(self.font_ui, 40, 'bold'),
                          fg='#7aa2f7', bg='#1a1b26').pack(expand=True)
-                tk.Label(splash, text="Loading...", font=('Courier New', 14),
+                tk.Label(splash, text="Loading...", font=(self.font_ui, 14),
                          fg='#a9b1d6', bg='#1a1b26').pack(pady=20)
         except Exception as e:
             print(f"Splash error: {e}")
-            tk.Label(splash, text="AQUAREAD", font=('Courier New', 40, 'bold'),
+            tk.Label(splash, text="AQUAREAD", font=(self.font_ui, 40, 'bold'),
                      fg='#7aa2f7', bg='#1a1b26').pack(expand=True)
 
         # Close splash after 3 seconds
@@ -247,7 +269,7 @@ class AquareadControlPanel:
             'facilitator_interval': 30,
             'facilitator_lookback': 180,
             'facilitator_prompt': '次の話題を提案してください。',
-            'theme_mode': 'light'
+            'theme_mode': 'dark'
         }
 
         if os.path.exists(self.config_file):
@@ -265,7 +287,7 @@ class AquareadControlPanel:
             self.config = default_config
             self.save_config()
 
-        # Pink Bronsonのメイン設定からAPIキーを取得
+        # Pink Bronsonのメイン設定からAPIキーとテーマを取得
         try:
             pb_config_path = os.path.normpath(
                 os.path.join(self.project_root, '..', '..', 'config.json'))
@@ -275,6 +297,10 @@ class AquareadControlPanel:
                     api_key = pb_config.get('api_keys', {}).get('gemini_key', '')
                     if api_key:
                         self.config['api_key'] = api_key
+                    # メインのテーマ設定に準拠
+                    pb_theme = pb_config.get('theme_mode') or pb_config.get('theme')
+                    if pb_theme in ('dark', 'light'):
+                        self.config['theme_mode'] = pb_theme
         except Exception as e:
             print(f"Pink BronsonのAPIキー読み込みエラー: {e}")
 
@@ -303,21 +329,63 @@ class AquareadControlPanel:
             json.dump(self.config, f, indent=2, ensure_ascii=False)
 
     def apply_theme(self):
-        """Apply 90s industrial machine UI theme."""
-        # ── Palette ──────────────────────────────────────────
-        self.bg_color        = '#1C1C1C'   # outer body
-        self.frame_bg        = '#242424'   # panel surface
-        self.frame_border    = '#383838'   # panel edges
-        self.fg_color        = '#AABF00'   # phosphor green (LCD text)
-        self.fg_secondary    = '#607000'   # dim phosphor
-        self.accent_blue     = '#AABF00'   # re-use phosphor for accent
-        self.accent_cyan     = '#C8DC00'   # bright phosphor highlight
-        self.accent_purple   = '#8A9F00'   # mid phosphor
-        self.accent_green    = '#44BB00'   # LED green (running)
-        self.accent_red      = '#BB2200'   # LED red (error/stop)
-        self.entry_bg        = '#141800'   # LCD background
-        self.entry_border    = '#383838'
-        self.text_on_button  = '#C4C4C4'   # button label text
+        """Apply 90s industrial machine UI theme (dark or Win95 light)."""
+        mode = self.config.get('theme_mode', 'dark')
+
+        if mode == 'light':
+            self.font_ui = 'MS Gothic'
+            self.font_jp = 'MS Gothic'
+            # ── Win95 ライトパレット ──────────────────────────
+            self.bg_color        = '#C0C0C0'
+            self.frame_bg        = '#D4D0C8'
+            self.frame_border    = '#808080'
+            self.fg_color        = '#000000'
+            self.fg_secondary    = '#505050'
+            self.accent_blue     = '#0000AA'
+            self.accent_cyan     = '#0000CC'
+            self.accent_purple   = '#800080'
+            self.accent_green    = '#00AA00'
+            self.accent_red      = '#CC0000'
+            self.entry_bg        = '#FFFFFF'
+            self.entry_border    = '#808080'
+            self.text_on_button  = '#000000'
+            _btn_bg   = '#D4D0C8'
+            _btn_act  = '#0000AA'
+            _btn_act_fg = '#FFFFFF'
+            _tab_bg   = '#C0C0C0'
+            _tab_fg   = '#505050'
+            _tab_sel_fg = '#000000'
+            _lbl_fg   = '#000000'
+            _base_fg  = '#000000'
+            _pb_trough = '#A0A0A0'
+            _pb_dark   = '#007700'
+        else:
+            self.font_ui = FONT
+            self.font_jp = FONT_JP
+            # ── 90s インダストリアル ダークパレット ───────────
+            self.bg_color        = '#1C1C1C'
+            self.frame_bg        = '#242424'
+            self.frame_border    = '#383838'
+            self.fg_color        = '#AABF00'
+            self.fg_secondary    = '#607000'
+            self.accent_blue     = '#AABF00'
+            self.accent_cyan     = '#C8DC00'
+            self.accent_purple   = '#8A9F00'
+            self.accent_green    = '#44BB00'
+            self.accent_red      = '#BB2200'
+            self.entry_bg        = '#141800'
+            self.entry_border    = '#383838'
+            self.text_on_button  = '#C4C4C4'
+            _btn_bg   = '#2A2A2A'
+            _btn_act  = '#3A3A3A'
+            _btn_act_fg = '#E0E0E0'
+            _tab_bg   = '#282828'
+            _tab_fg   = '#707070'
+            _tab_sel_fg = '#C0C0C0'
+            _lbl_fg   = '#A0A0A0'
+            _base_fg  = '#C0C0C0'
+            _pb_trough = '#1A1A1A'
+            _pb_dark   = '#228800'
 
         style = ttk.Style()
         style.theme_use('clam')
@@ -325,56 +393,56 @@ class AquareadControlPanel:
         # Base
         style.configure('.',
                         background=self.bg_color,
-                        foreground='#C0C0C0',
-                        font=('Courier New', 9))
+                        foreground=_base_fg,
+                        font=(self.font_ui, 9))
 
         # Label
         style.configure('TLabel',
                         background=self.bg_color,
-                        foreground='#A0A0A0',
-                        font=('Courier New', 9))
+                        foreground=_lbl_fg,
+                        font=(self.font_ui, 9))
 
         # Button — raised bevel, monochrome
         style.configure('TButton',
-                        background='#2A2A2A',
+                        background=_btn_bg,
                         foreground=self.text_on_button,
                         borderwidth=2,
                         relief='raised',
                         padding=[10, 4],
-                        font=('Courier New', 9, 'bold'))
+                        font=(self.font_ui, 9, 'bold'))
         style.map('TButton',
-                  background=[('active', '#3A3A3A'), ('pressed', '#1E1E1E')],
-                  foreground=[('active', '#E0E0E0'), ('pressed', '#909090')])
+                  background=[('active', _btn_act), ('pressed', self.bg_color)],
+                  foreground=[('active', _btn_act_fg), ('pressed', '#909090')])
 
-        # LabelFrame — groove border, dark panel
+        # LabelFrame — groove border
         style.configure('TLabelframe',
                         background=self.frame_bg,
-                        foreground='#909090',
+                        foreground=self.frame_border,
                         borderwidth=2,
                         bordercolor=self.frame_border,
                         relief='groove')
         style.configure('TLabelframe.Label',
                         background=self.frame_bg,
-                        foreground='#909090',
-                        font=('Courier New', 8, 'bold'))
+                        foreground=self.fg_secondary,
+                        font=(self.font_ui, 8, 'bold'))
 
         # Notebook (Tab)
         style.configure('TNotebook',
                         background=self.bg_color,
                         borderwidth=1)
         style.configure('TNotebook.Tab',
-                        background='#282828',
-                        foreground='#707070',
+                        background=_tab_bg,
+                        foreground=_tab_fg,
                         padding=[12, 4],
-                        font=('Courier New', 9))
+                        font=(self.font_ui, 9))
         style.map('TNotebook.Tab',
                   background=[('selected', self.frame_bg)],
-                  foreground=[('selected', '#C0C0C0')])
+                  foreground=[('selected', _tab_sel_fg)])
 
         # Frame
         style.configure('TFrame', background=self.bg_color)
 
-        # Entry / Spinbox — LCD style
+        # Entry / Spinbox
         style.configure('TEntry',
                         fieldbackground=self.entry_bg,
                         foreground=self.fg_color,
@@ -383,23 +451,23 @@ class AquareadControlPanel:
                         darkcolor=self.frame_border,
                         insertcolor=self.fg_color,
                         borderwidth=1,
-                        font=('Courier New', 9))
+                        font=(self.font_ui, 9))
 
         style.configure('TSpinbox',
                         fieldbackground=self.entry_bg,
                         foreground=self.fg_color,
                         bordercolor=self.frame_border,
-                        arrowcolor='#707070',
+                        arrowcolor=self.frame_border,
                         borderwidth=1,
-                        font=('Courier New', 9))
+                        font=(self.font_ui, 9))
 
-        # Progressbar — LED green fill on dark track
+        # Progressbar
         style.configure('green.Horizontal.TProgressbar',
-                        troughcolor='#1A1A1A',
+                        troughcolor=_pb_trough,
                         background=self.accent_green,
                         bordercolor=self.frame_border,
                         lightcolor=self.accent_green,
-                        darkcolor='#228800')
+                        darkcolor=_pb_dark)
 
         # Separator
         style.configure('TSeparator', background=self.frame_border)
@@ -407,16 +475,42 @@ class AquareadControlPanel:
         # Radiobutton
         style.configure('TRadiobutton',
                         background=self.bg_color,
-                        foreground='#909090',
-                        font=('Courier New', 9))
+                        foreground=_lbl_fg,
+                        font=(self.font_ui, 9))
         style.map('TRadiobutton',
                   background=[('active', self.bg_color)],
-                  foreground=[('active', '#C0C0C0')])
+                  foreground=[('active', _base_fg)])
 
         self.root.configure(bg=self.bg_color)
 
     def create_ui(self):
         """Create the main UI with tabs."""
+        self._topmost = False
+
+        # Tab bar overlay: QUIT / SYS clock / always-on-top toggle
+        # Placed at top-right aligned with the notebook tab strip
+        self.current_time_var = tk.StringVar(value="--:--:--")
+        _ovl = tk.Frame(self.root, bg=self.bg_color, bd=0)
+        _ovl.place(relx=1.0, y=4, anchor='ne')
+
+        self._top_btn = tk.Button(
+            _ovl, text="▽", command=self.toggle_topmost,
+            bg=self.bg_color, fg=self.accent_cyan,
+            font=(self.font_ui, 9, 'bold'), relief='flat',
+            cursor='hand2', padx=4, pady=1)
+        self._top_btn.pack(side='left', padx=(0, 4))
+
+        tk.Label(_ovl, text="SYS:", bg=self.bg_color,
+                 fg=self.fg_secondary, font=(self.font_ui, 8)).pack(side='left')
+        tk.Label(_ovl, textvariable=self.current_time_var,
+                 bg=self.bg_color, fg=self.accent_cyan,
+                 font=(self.font_ui, 9, 'bold')).pack(side='left', padx=(2, 6))
+
+        tk.Button(_ovl, text="QUIT", command=self.cleanup_on_exit,
+                  bg=self.bg_color, fg='#BB2200',
+                  font=(self.font_ui, 9, 'bold'), relief='flat',
+                  cursor='hand2', padx=6, pady=1).pack(side='left', padx=(0, 6))
+
         # Create notebook (tabbed interface)
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill='both', expand=True, padx=2, pady=2)
@@ -431,31 +525,13 @@ class AquareadControlPanel:
         self.notebook.add(self.api_tab, text='📊 Analytics')
         self.create_api_tab()
 
-        # Tab 3: OBS Display
-        self.obs_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.obs_tab, text='OBS Display')
-        self.create_obs_tab()
-
-        # Tab 4: Archive Analyzer
+        # Tab 3: Archive Analyzer
         self.archive_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.archive_tab, text='📊 Archive')
         self.create_archive_tab()
 
     def create_main_tab(self):
         """Create the main control tab."""
-        # ── Top bar: time + quit on the right ──────────────────
-        top_bar = ttk.Frame(self.main_tab)
-        top_bar.pack(fill='x', padx=10, pady=(4, 0))
-
-        self.current_time_var = tk.StringVar(value="--:--:--")
-        ttk.Label(top_bar, textvariable=self.current_time_var,
-                  font=('Courier New', 11, 'bold'),
-                  foreground=self.accent_cyan).pack(side='right', padx=(6, 0))
-        ttk.Label(top_bar, text="SYS:",
-                  font=('Courier New', 8)).pack(side='right')
-        ttk.Button(top_bar, text="QUIT",
-                   command=self.cleanup_on_exit).pack(side='right', padx=(0, 14))
-
         # --- Input Source Section (full width) ---
         self.input_frame = ttk.LabelFrame(
             self.main_tab, text="Input Source Control", padding=4)
@@ -471,11 +547,11 @@ class AquareadControlPanel:
         ttk.Label(
             m_ctrl_frame,
             text="Microphone (STT) Status:",
-            font=('Courier New', 10, 'bold')).pack(side='left', padx=5)
+            font=(self.font_ui, 10, 'bold')).pack(side='left', padx=5)
         self.stt_status_var = tk.StringVar(value="Inactive")
         self.stt_status_label = ttk.Label(
             m_ctrl_frame, textvariable=self.stt_status_var,
-            font=('Courier New', 12, 'bold'), foreground='#606060')
+            font=(self.font_ui, 12, 'bold'), foreground='#606060')
         self.stt_status_label.pack(side='left', padx=5)
 
         ttk.Separator(m_ctrl_frame, orient='vertical').pack(
@@ -494,7 +570,7 @@ class AquareadControlPanel:
         backend_frame = ttk.Frame(mic_ctrl_frame)
         backend_frame.pack(fill='x', pady=(4, 0), padx=5)
         ttk.Label(backend_frame, text="STT Engine:",
-                  font=('Courier New', 8, 'bold')).pack(side='left')
+                  font=(self.font_ui, 8, 'bold')).pack(side='left')
         self.stt_backend_var = tk.StringVar(
             value=self.config.get('stt_backend', 'whisper'))
 
@@ -517,7 +593,7 @@ class AquareadControlPanel:
         # Volume Meter
         vol_frame = ttk.Frame(mic_ctrl_frame)
         vol_frame.pack(fill='x', pady=2, padx=5)
-        ttk.Label(vol_frame, text="Level:", font=('Courier New', 8)).pack(side='left')
+        ttk.Label(vol_frame, text="Level:", font=(self.font_ui, 8)).pack(side='left')
 
         style = ttk.Style()
         style.configure("green.Horizontal.TProgressbar", foreground='green', background='green')
@@ -530,7 +606,7 @@ class AquareadControlPanel:
         ttk.Label(
             mic_ctrl_frame,
             text="* マイクは Pink Bronson の設定と共有されます。",
-            font=('Courier New', 8), foreground='#606060').pack(anchor='w', padx=5)
+            font=(self.font_ui, 8), foreground='#606060').pack(anchor='w', padx=5)
 
         # --- Shared Data Flow Info ---
         flow_frame = ttk.LabelFrame(
@@ -552,7 +628,7 @@ class AquareadControlPanel:
             output_info_frame,
             text="Target File:",
             font=(
-                'Courier New',
+                'VT323',
                 9,
                 'bold')).pack(
             side='left')
@@ -561,7 +637,7 @@ class AquareadControlPanel:
             textvariable=self.cleantext_file_var,
             foreground='#AABF00',
             font=(
-                'Courier New',
+                'VT323',
                 8)).pack(
             side='left',
             padx=5)
@@ -571,7 +647,7 @@ class AquareadControlPanel:
             output_info_frame,
             textvariable=self.cleantext_time_var,
             font=(
-                'Courier New',
+                'VT323',
                 8),
             foreground='#606060').pack(
             side='left',
@@ -582,7 +658,7 @@ class AquareadControlPanel:
             output_info_frame,
             textvariable=self.cleantext_entries_var,
             font=(
-                'Courier New',
+                'VT323',
                 8),
             foreground='#606060').pack(
             side='left',
@@ -595,6 +671,7 @@ class AquareadControlPanel:
         self.cleantext_display = scrolledtext.ScrolledText(
             preview_frame, height=3, width=100, wrap='word',
             bg=self.entry_bg, fg=self.fg_color,
+            font=(self.font_jp, 10),
             insertbackground=self.accent_blue,
             selectbackground=self.accent_blue,
             selectforeground=self.text_on_button,
@@ -637,10 +714,10 @@ class AquareadControlPanel:
         cost_container.pack(fill='x')
 
         self.today_cost_var = tk.StringVar(value="Today's Cost: $0.000000")
-        ttk.Label(cost_container, textvariable=self.today_cost_var, font=('Courier New', 14, 'bold'), foreground=self.accent_red).pack(side='left', padx=20)
+        ttk.Label(cost_container, textvariable=self.today_cost_var, font=(self.font_ui, 14, 'bold'), foreground=self.accent_red).pack(side='left', padx=20)
 
         self.total_cost_var = tk.StringVar(value="Total Cost: $0.000000")
-        ttk.Label(cost_container, textvariable=self.total_cost_var, font=('Courier New', 12), foreground=self.fg_secondary).pack(side='left', padx=20)
+        ttk.Label(cost_container, textvariable=self.total_cost_var, font=(self.font_ui, 12), foreground=self.fg_secondary).pack(side='left', padx=20)
 
         # Usage Statistics section
         usage_frame = ttk.LabelFrame(
@@ -865,7 +942,7 @@ class AquareadControlPanel:
         setattr(self, f'{name}_status_var', status_var)
         status_label = ttk.Label(
             header_frame, textvariable=status_var, font=(
-                'Courier New', 10, 'bold'), foreground='#BB2200')
+                'VT323', 10, 'bold'), foreground='#BB2200')
         status_label.pack(side='left', padx=5)
         setattr(self, f'{name}_status_label', status_label)
 
@@ -883,7 +960,7 @@ class AquareadControlPanel:
             info_frame,
             textvariable=fetch_time_var,
             font=(
-                'Courier New',
+                'VT323',
                 8)).pack(
             side='left',
             padx=(
@@ -893,7 +970,7 @@ class AquareadControlPanel:
             info_frame,
             textvariable=output_time_var,
             font=(
-                'Courier New',
+                'VT323',
                 8)).pack(
             side='left')
 
@@ -901,7 +978,7 @@ class AquareadControlPanel:
         log_frame = ttk.LabelFrame(frame, text="Process Logs", padding=2)
         log_frame.pack(fill='x', pady=2)
         log_list = tk.Listbox(
-            log_frame, height=3, font=('Consolas', 8),
+            log_frame, height=3, font=(self.font_ui, 8),
             bg=self.entry_bg, fg=self.fg_color,
             selectbackground=self.accent_blue,
             selectforeground=self.text_on_button,
@@ -1273,7 +1350,7 @@ class AquareadControlPanel:
                         '1.0', f"⚠️ SYSTEM ERROR:\n{error_msg}\n\n", 'error')
                     self.cleantext_display.tag_config(
                         'error', foreground='#BB2200', font=(
-                            'Courier New', 10, 'bold'))
+                            'VT323', 10, 'bold'))
             except BaseException:
                 pass
 
@@ -1360,10 +1437,6 @@ class AquareadControlPanel:
             except BaseException:
                 pass
 
-        # Update OBS JS files (for local file access workaround)
-        if hasattr(self, 'obs_helper'):
-            self.obs_helper.update_js_files()
-
         # Schedule next update (only if window is still alive)
         try:
             self.root.after(2000, self.update_outputs)
@@ -1391,7 +1464,7 @@ class AquareadControlPanel:
 
         # Text Area
         text_area = scrolledtext.ScrolledText(
-            editor, wrap='word', font=('Courier New', 10),
+            editor, wrap='word', font=(self.font_ui, 10),
             bg=self.entry_bg, fg=self.fg_color,
             insertbackground=self.accent_blue,
             selectbackground=self.accent_blue,
@@ -1460,14 +1533,14 @@ class AquareadControlPanel:
             frame,
             text="Select Theme Mode:",
             font=(
-                'Courier New',
+                'VT323',
                 12)).pack(
             anchor='w',
             pady=10)
 
         self.theme_var = tk.StringVar(
             value=self.config.get(
-                'theme_mode', 'light'))
+                'theme_mode', 'dark'))
 
         ttk.Radiobutton(
             frame,
@@ -1501,6 +1574,22 @@ class AquareadControlPanel:
         self.save_config()
         self.apply_theme()
         messagebox.showinfo("Theme Saved", "Theme settings saved.")
+
+    def toggle_topmost(self):
+        self._topmost = not self._topmost
+        self.root.attributes('-topmost', self._topmost)
+        self._top_btn.config(text="▲" if self._topmost else "▽")
+
+    def toggle_theme(self):
+        """Toggle between dark and light mode, then restart to apply."""
+        current = self.config.get('theme_mode', 'dark')
+        new_mode = 'light' if current == 'dark' else 'dark'
+        self.config['theme_mode'] = new_mode
+        self.save_config()
+        # Restart process to fully apply new theme
+        import subprocess
+        subprocess.Popen([sys.executable] + sys.argv)
+        self.root.destroy()
 
     def update_status(self):
         """Update status indicators."""
@@ -1548,278 +1637,6 @@ class AquareadControlPanel:
     def _update_label_color(self, widget, target_var, color):
         """Deprecated: colors are now handled directly in update_status."""
         pass
-    # ========== OBS Display Tab Functions ==========
-
-    def create_obs_tab(self):
-        """Create the OBS Display configuration tab with sub-tabs for each output."""
-        # Instructions
-        info_frame = ttk.LabelFrame(
-            self.obs_tab,
-            text="📺 OBS Browser Source Setup",
-            padding=10)
-        info_frame.pack(fill='x', padx=10, pady=10)
-
-        info_text = (
-            "You can generate individual HTML files for each output file (Title, Summary, Facilitator).\n"
-            "1. Edit CSS and JavaScript in each tab\n"
-            "2. Click 'Generate HTML' to create the file\n"
-            "3. Add output/obs_title.html etc. as a Browser Source in OBS")
-        ttk.Label(info_frame, text=info_text, justify='left').pack(anchor='w')
-
-        # Display Style
-        style_frame = ttk.Frame(self.obs_tab)
-        style_frame.pack(fill='x', padx=10, pady=(0, 5))
-        ttk.Label(style_frame, text="Display Style:").pack(side='left')
-
-        self.obs_style_var = tk.StringVar(
-            value=self.config.get(
-                'obs_style', 'standard'))
-        style_combo = ttk.Combobox(
-            style_frame,
-            textvariable=self.obs_style_var,
-            values=[
-                'standard',
-                'character'],
-            state='readonly',
-            width=15)
-        style_combo.pack(side='left', padx=10)
-        style_combo.bind('<<ComboboxSelected>>', self.on_style_change)
-
-        ttk.Button(
-            style_frame,
-            text="Apply Style & Regenerate",
-            command=self.apply_obs_style).pack(
-            side='left',
-            padx=10)
-        ttk.Label(
-            style_frame,
-            text="* 'character' uses bloson.png",
-            font=(
-                'Courier New',
-                8),
-            foreground='#606060').pack(
-            side='left',
-            padx=5)
-
-        # Create sub-notebook for each output type
-        self.obs_notebook = ttk.Notebook(self.obs_tab)
-        self.obs_notebook.pack(fill='both', expand=True, padx=10, pady=5)
-
-        # Create tabs for each output type
-        self.create_obs_output_tab('summary', '📝 Summary')
-        self.create_obs_output_tab('title', '🏷️ Title')
-        self.create_obs_output_tab('facilitator', '💡 Facilitator')
-
-    def create_obs_output_tab(self, output_type, tab_label):
-        """Create a tab for a specific output type with CSS/JS editors."""
-        # Create tab frame
-        tab_frame = ttk.Frame(self.obs_notebook)
-        self.obs_notebook.add(tab_frame, text=tab_label)
-
-        # File path display
-        path_frame = ttk.Frame(tab_frame)
-        path_frame.pack(fill='x', padx=10, pady=5)
-        ttk.Label(
-            path_frame,
-            text="Output File:",
-            font=(
-                'Courier New',
-                9,
-                'bold')).pack(
-            side='left',
-            padx=5)
-        html_path = self.obs_helper.get_html_path(output_type)
-        ttk.Label(
-            path_frame,
-            text=html_path,
-            foreground='#AABF00').pack(
-            side='left')
-
-        # Main editor area
-        editor_frame = ttk.Frame(tab_frame)
-        editor_frame.pack(fill='both', expand=True, padx=10, pady=5)
-
-        # Left side: CSS Editor
-        css_frame = ttk.LabelFrame(
-            editor_frame, text="🎨 CSS Styles", padding=10)
-        css_frame.pack(side='left', fill='both', expand=True, padx=(0, 5))
-
-        css_editor = scrolledtext.ScrolledText(
-            css_frame, height=20, wrap='none', font=(
-                'Consolas', 10))
-        css_editor.pack(fill='both', expand=True)
-        setattr(self, f'obs_{output_type}_css_editor', css_editor)
-
-        # Right side: JavaScript Editor
-        js_frame = ttk.LabelFrame(
-            editor_frame, text="⚡ JavaScript", padding=10)
-        js_frame.pack(side='left', fill='both', expand=True, padx=(5, 0))
-
-        js_editor = scrolledtext.ScrolledText(
-            js_frame, height=20, wrap='none', font=(
-                'Consolas', 10))
-        js_editor.pack(fill='both', expand=True)
-        setattr(self, f'obs_{output_type}_js_editor', js_editor)
-
-        # Load settings or use defaults
-        saved_css, saved_js = self.obs_helper.load_settings(output_type)
-        if saved_css:
-            css_editor.insert('1.0', saved_css)
-        else:
-            css_editor.insert(
-                '1.0', self.obs_helper.get_default_css(output_type))
-
-        if saved_js:
-            js_editor.insert('1.0', saved_js)
-        else:
-            js_editor.insert(
-                '1.0', self.obs_helper.get_default_js(output_type))
-
-        # Bottom buttons
-        button_frame = ttk.Frame(tab_frame)
-        button_frame.pack(fill='x', padx=10, pady=10)
-
-        ttk.Button(
-            button_frame,
-            text="🔄 Generate HTML",
-            command=lambda: self.generate_obs_output_html(output_type)).pack(
-            side='left',
-            padx=5)
-
-        ttk.Button(
-            button_frame,
-            text="👁️ Preview in Browser",
-            command=lambda: self.preview_obs_output_html(output_type)).pack(
-            side='left',
-            padx=5)
-
-        ttk.Button(
-            button_frame,
-            text="💾 Save CSS/JS Settings",
-            command=lambda: self.save_obs_output_settings(output_type)).pack(
-            side='left',
-            padx=5)
-
-        ttk.Button(
-            button_frame,
-            text="🔙 Load Default",
-            command=lambda: self.load_default_obs_output_styles(output_type)).pack(
-            side='left',
-            padx=5)
-
-    def generate_obs_output_html(self, output_type):
-        """Generate HTML for a specific output type."""
-        try:
-            css_editor = getattr(self, f'obs_{output_type}_css_editor')
-            js_editor = getattr(self, f'obs_{output_type}_js_editor')
-
-            custom_css = css_editor.get('1.0', 'end-1c')
-            custom_js = js_editor.get('1.0', 'end-1c')
-
-            success, result = self.obs_helper.generate_html(
-                output_type, custom_css, custom_js)
-
-            if success:
-                messagebox.showinfo("Success",
-                                    f"OBS HTML generated successfully!\n\n"
-                                    f"File: {result}\n\n"
-                                    f"Add this file as a Browser Source in OBS:\n"
-                                    f"1. Add Source → Browser\n"
-                                    f"2. Local File: {result}\n"
-                                    f"3. Width: 800, Height: 200 (adjust as needed)")
-            else:
-                messagebox.showerror(
-                    "Error", f"Failed to generate OBS HTML: {result}")
-
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to generate OBS HTML: {e}")
-
-    def preview_obs_output_html(self, output_type):
-        """Preview HTML for a specific output type."""
-        if self.obs_helper.preview_html(output_type):
-            pass  # Successfully opened
-        else:
-            messagebox.showwarning(
-                "Warning", f"OBS HTML for {output_type} not found. Please generate it first.")
-
-    def save_obs_output_settings(self, output_type):
-        """Save CSS/JS settings for a specific output type."""
-        try:
-            css_editor = getattr(self, f'obs_{output_type}_css_editor')
-            js_editor = getattr(self, f'obs_{output_type}_js_editor')
-
-            css_content = css_editor.get('1.0', 'end-1c')
-            js_content = js_editor.get('1.0', 'end-1c')
-
-            self.obs_helper.save_settings(output_type, css_content, js_content)
-            messagebox.showinfo(
-                "Success", f"{output_type} CSS/JS settings saved!")
-
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save settings: {e}")
-
-    def load_default_obs_output_styles(self, output_type):
-        """Reset to default CSS and JS for a specific output type."""
-        try:
-            css_editor = getattr(self, f'obs_{output_type}_css_editor')
-            js_editor = getattr(self, f'obs_{output_type}_js_editor')
-
-            css_editor.delete('1.0', 'end')
-            css_editor.insert(
-                '1.0', self.obs_helper.get_default_css(output_type))
-
-            js_editor.delete('1.0', 'end')
-            js_editor.insert(
-                '1.0', self.obs_helper.get_default_js(output_type))
-
-            messagebox.showinfo("Success", "Default styles loaded!")
-
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load defaults: {e}")
-
-    def on_style_change(self, event=None):
-        """Handle style change."""
-        pass
-
-    def apply_obs_style(self):
-        """Apply selected style and regenerate HTML."""
-        style = self.obs_style_var.get()
-        self.config['obs_style'] = style
-        self.save_config()
-        self.recreate_obs_html()
-        messagebox.showinfo(
-            "Style Applied",
-            f"Switched to {style} mode.\nHTML files regenerated.")
-
-    def recreate_obs_html(self):
-        """Regenerate all OBS HTML files with current style."""
-        for out_type in ['summary', 'title', 'facilitator']:
-            # Load CSS/JS
-            css, js = self.obs_helper.load_settings(out_type)
-            style = self.config.get('obs_style', 'standard')
-
-            if not css:
-                if style == 'character':
-                    css = self.obs_helper.get_character_css(out_type)
-                else:
-                    css = self.obs_helper.get_default_css(out_type)
-
-            # Smart Switch: If switching to character mode but CSS looks like
-            # standard, switch it
-            if style == 'character' and 'box-shadow: 0 5px 20px' in (
-                    css or ''):
-                css = self.obs_helper.get_character_css(out_type)
-
-            # Smart Switch: If switching to standard but CSS looks like
-            # character, switch it
-            if style == 'standard' and 'bubble-container' in (css or ''):
-                css = self.obs_helper.get_default_css(out_type)
-
-            if not js:
-                js = self.obs_helper.get_default_js(out_type)
-
-            self.obs_helper.generate_html(out_type, css, js, style_mode=style)
-
 
     # ── Archive Analyzer Tab ──────────────────────────────────────────────────
     def create_archive_tab(self):
@@ -1839,7 +1656,7 @@ class AquareadControlPanel:
         left.rowconfigure(2, weight=1)
 
         tk.Label(left, text='📁 配信セッション', bg=self.bg_color,
-                 fg=self.fg_color, font=('Courier New', 11, 'bold')).grid(
+                 fg=self.fg_color, font=(self.font_ui, 11, 'bold')).grid(
             row=0, column=0, sticky='w', pady=(0, 4))
 
         refresh_btn = tk.Button(
@@ -1857,7 +1674,7 @@ class AquareadControlPanel:
         self.archive_listbox = tk.Listbox(
             list_frame, bg=self.entry_bg, fg=self.fg_color,
             selectbackground=self.accent_blue, selectforeground='#ffffff',
-            relief='flat', borderwidth=0, font=('Consolas', 10),
+            relief='flat', borderwidth=0, font=(self.font_ui, 10),
             activestyle='none')
         self.archive_listbox.grid(row=0, column=0, sticky='nsew')
         sb = tk.Scrollbar(list_frame, orient='vertical',
@@ -1883,7 +1700,7 @@ class AquareadControlPanel:
 
         # Log preview
         tk.Label(left, text='📄 ログプレビュー', bg=self.bg_color,
-                 fg=self.fg_color, font=('Courier New', 10, 'bold')).grid(
+                 fg=self.fg_color, font=(self.font_ui, 10, 'bold')).grid(
             row=4, column=0, columnspan=2, sticky='w', pady=(10, 2))
 
         left.rowconfigure(5, weight=1)
@@ -1894,7 +1711,7 @@ class AquareadControlPanel:
 
         self.archive_preview = tk.Text(
             preview_frame, bg=self.entry_bg, fg=self.fg_color,
-            relief='flat', borderwidth=0, font=('Consolas', 9),
+            relief='flat', borderwidth=0, font=(self.font_ui, 9),
             state='disabled', wrap='word')
         self.archive_preview.grid(row=0, column=0, sticky='nsew')
         psb = tk.Scrollbar(preview_frame, orient='vertical',
@@ -1910,7 +1727,7 @@ class AquareadControlPanel:
         right.rowconfigure(4, weight=2)
 
         tk.Label(right, text='✏️ 解析プロンプト', bg=self.bg_color,
-                 fg=self.fg_color, font=('Courier New', 11, 'bold')).grid(
+                 fg=self.fg_color, font=(self.font_ui, 11, 'bold')).grid(
             row=0, column=0, sticky='w', pady=(0, 2))
 
         prompt_frame = tk.Frame(right, bg=self.entry_border)
@@ -1920,7 +1737,7 @@ class AquareadControlPanel:
 
         self.archive_prompt_text = tk.Text(
             prompt_frame, bg=self.entry_bg, fg=self.fg_color,
-            relief='flat', borderwidth=0, font=('Courier New', 10),
+            relief='flat', borderwidth=0, font=(self.font_ui, 10),
             wrap='word', height=10)
         self.archive_prompt_text.grid(row=0, column=0, sticky='nsew')
         psb2 = tk.Scrollbar(prompt_frame, orient='vertical',
@@ -1936,7 +1753,7 @@ class AquareadControlPanel:
         self.archive_run_btn = tk.Button(
             btn_frame, text='🔍 解析実行',
             bg=self.accent_green, fg=self.text_on_button,
-            relief='flat', padx=14, pady=4, font=('Courier New', 11, 'bold'),
+            relief='flat', padx=14, pady=4, font=(self.font_ui, 11, 'bold'),
             command=self._run_archive_analysis)
         self.archive_run_btn.pack(side='left')
 
@@ -1956,12 +1773,12 @@ class AquareadControlPanel:
 
         self.archive_status_label = tk.Label(
             right, text='', bg=self.bg_color, fg=self.accent_cyan,
-            font=('Courier New', 9))
+            font=(self.font_ui, 9))
         self.archive_status_label.grid(row=3, column=0, sticky='w', pady=(0, 2))
 
         # Result area
         tk.Label(right, text='📊 解析結果', bg=self.bg_color,
-                 fg=self.fg_color, font=('Courier New', 11, 'bold')).grid(
+                 fg=self.fg_color, font=(self.font_ui, 11, 'bold')).grid(
             row=3, column=0, sticky='w', pady=(0, 2))
 
         result_frame = tk.Frame(right, bg=self.entry_border)
@@ -1971,7 +1788,7 @@ class AquareadControlPanel:
 
         self.archive_result_text = tk.Text(
             result_frame, bg=self.entry_bg, fg=self.fg_color,
-            relief='flat', borderwidth=0, font=('Courier New', 10),
+            relief='flat', borderwidth=0, font=(self.font_ui, 10),
             state='disabled', wrap='word')
         self.archive_result_text.grid(row=0, column=0, sticky='nsew')
         rsb = tk.Scrollbar(result_frame, orient='vertical',
