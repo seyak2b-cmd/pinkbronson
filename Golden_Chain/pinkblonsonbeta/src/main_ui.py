@@ -236,7 +236,7 @@ class AquareadControlPanel:
         """Load configuration from file."""
         default_config = {
             'api_key': '',  # APIキーはデフォルトで空にする
-            'copier_source': 'C:\\Users\\seyak\\AppData\\Roaming\\Aqua Voice\\settings.json',
+            'copier_source': '',
             'summarizer_interval': 60,
             'summarizer_lookback': 666,
             'summarizer_prompt': '会話を3行で要約してください。',
