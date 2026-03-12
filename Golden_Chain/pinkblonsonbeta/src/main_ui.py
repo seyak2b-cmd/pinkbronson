@@ -103,9 +103,7 @@ class AquareadControlPanel:
         self.apply_theme()
 
         # Kill orphaned processes from previous runs
-        print("DEBUG: Killing orphaned processes...")
         self.kill_orphaned_processes()
-        print("DEBUG: Orphaned processes killed.")
 
         # Create UI with tabs
         self.create_ui()
@@ -123,10 +121,8 @@ class AquareadControlPanel:
         # self.show_splash()
 
     def show_splash(self):
-        print("DEBUG: show_splash entered.")
         """Show splash screen before main window."""
         self.root.withdraw()  # Hide main window
-        print("DEBUG: Main window withdrawn.")
 
         splash = tk.Toplevel(self.root)
         splash.overrideredirect(True)  # No window frame
@@ -174,16 +170,12 @@ class AquareadControlPanel:
 
         # Close splash after 3 seconds
         def close_splash():
-            print("DEBUG: close_splash called!")
             splash.destroy()
-            print("DEBUG: Splash destroyed.")
             self.root.deiconify()
             self.root.lift()
             self.root.focus_force()
-            print("DEBUG: Main window deiconified and lifted.")
             self.root.update()
 
-        print("DEBUG: Scheduling close_splash in 3000ms")
         self.root.after(3000, close_splash)
 
     def kill_orphaned_processes(self):
@@ -239,21 +231,6 @@ class AquareadControlPanel:
         # Then force sweep orphans if requested
         if force:
             self.kill_orphaned_processes()
-            # Also ensure copier is dead
-            try:
-                if platform.system() == 'Windows':
-                    subprocess.run(['taskkill',
-                                    '/F',
-                                    '/IM',
-                                    'powershell.exe'],
-                                   stdout=subprocess.DEVNULL,
-                                   stderr=subprocess.DEVNULL)
-                else:
-                    # On Mac/Linux, copier might be running via pwsh or python
-                    # wrapper
-                    pass
-            except BaseException:
-                pass
 
     def load_config(self):
         """Load configuration from file."""
